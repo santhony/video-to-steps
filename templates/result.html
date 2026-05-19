@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Result — {{ manifest.job_id }}{% endblock %}
+{% block main %}
+<section class="meta">
+  <small>
+    Mode: {{ manifest.mode }} · Cost: ${{ '%.4f' % manifest.cost.total_usd }}
+    · Embedder: {{ manifest.config_snapshot.embed_backend }}
+    · LLM: {{ manifest.config_snapshot.llm_model }}
+    · Vision: {{ manifest.config_snapshot.vision_model }}
+  </small>
+</section>
+
+<ol class="steps">
+{% for step in steps %}
+  <li>
+    <p class="instruction">{{ step.instruction }}</p>
+    <div class="frame-grid">
+      {% for frame in step.frames %}
+        <a href="/job/{{ manifest.job_id }}/frame/{{ '%04d' % (frame.index + 1) }}.jpg">
+          <img src="/job/{{ manifest.job_id }}/frame/{{ '%04d' % (frame.index + 1) }}.jpg"
+               alt="{{ frame_captions.get(frame.index|string, '') or step.instruction }}"
+               loading="lazy">
+        </a>
+      {% endfor %}
+    </div>
+  </li>
+{% endfor %}
+</ol>
+{% endblock %}

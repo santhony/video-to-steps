@@ -1,0 +1,10 @@
+<div id="status">
+  {% if manifest.status == "done" %}
+    <p class="status status-done"><strong>Done.</strong></p>
+    <p><a href="/job/{{ manifest.job_id }}/result">View result →</a></p>
+    <p class="cost">Final cost: ${{ '%.4f' % manifest.cost.total_usd }}</p>
+  {% else %}
+    <p class="status status-error"><strong>Error.</strong></p>
+    <pre class="error">{{ manifest.error }}</pre>
+  {% endif %}
+</div>

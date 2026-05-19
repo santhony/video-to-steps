@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block main %}
+<form method="post" action="/process">
+  <label for="url">YouTube URL</label>
+  <input type="url" id="url" name="url" required
+         placeholder="https://www.youtube.com/watch?v=..." autofocus>
+  <button type="submit">Make steps</button>
+</form>
+<p class="hint">Paste the URL of a short instructional video. We download
+captions and frames, then build illustrated step-by-step instructions.</p>
+{% endblock %}

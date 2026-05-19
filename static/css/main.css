@@ -1,0 +1,22 @@
+:root { --fg: #1a1a1a; --bg: #fafafa; --accent: #2a6fdb; --muted: #666; }
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  max-width: 880px; margin: 1em auto; padding: 0 1em;
+  color: var(--fg); background: var(--bg); line-height: 1.45;
+}
+header .brand { font-weight: 700; color: var(--fg); text-decoration: none; }
+form { display: flex; flex-direction: column; gap: 0.5em; margin-top: 2em; }
+input[type=url] { padding: 0.6em; font-size: 1rem; }
+button { padding: 0.6em 1.2em; font-size: 1rem; background: var(--accent); color: white; border: 0; border-radius: 4px; cursor: pointer; }
+.hint { color: var(--muted); margin-top: 1em; }
+.status-running { color: var(--accent); }
+.status-done    { color: #1a7a3a; }
+.status-error   { color: #b00020; }
+.error          { white-space: pre-wrap; background: #fff0f0; padding: 1em; border-radius: 4px; }
+.cost           { color: var(--muted); font-size: 0.9em; }
+.meta small     { color: var(--muted); }
+.steps          { padding-left: 1.4em; }
+.steps li       { margin: 1.2em 0; }
+.instruction    { font-size: 1.05em; }
+.frame-grid     { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 6px; margin-top: 0.4em; }
+.frame-grid img { width: 100%; height: auto; border-radius: 4px; }

@@ -1,0 +1,10 @@
+<div id="status"
+     hx-get="/job/{{ manifest.job_id }}/status"
+     hx-trigger="every 2s"
+     hx-swap="outerHTML">
+  <p class="status status-{{ manifest.status }}">
+    <strong>Status:</strong> {{ manifest.status }}
+    {% if manifest.progress %} — {{ manifest.progress }}{% endif %}
+  </p>
+  <p class="cost">Running cost: ${{ '%.4f' % manifest.cost.total_usd }}</p>
+</div>
