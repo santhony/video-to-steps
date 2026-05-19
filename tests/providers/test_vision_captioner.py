@@ -122,11 +122,14 @@ async def test_vision_captioner_factory_via_build_vision():
     from providers.vision import build_vision
 
     # Build a Settings instance with test configuration.
+    # _env_file=None isolates the test from any local .env so it doesn't
+    # inadvertently pick up the operator's real provider values.
     settings = Settings(
+        _env_file=None,
         vision_api_key="test-key",
         vision_model="gpt-4o-mini",
         vision_base_url="https://api.openai.com",
-        vision_path="/v1/chat/completions",
+        vision_path_chat="/v1/chat/completions",
     )
 
     captioner = build_vision(settings)

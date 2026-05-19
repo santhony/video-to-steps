@@ -23,6 +23,7 @@ from pathlib import Path
 import numpy as np
 
 from config import Settings
+from pipeline.audio import extract_audio
 from pipeline.caption_winners import caption_winners
 from pipeline.captions import dedupe_rolling, parse_vtt
 from pipeline.download import download_video_and_captions
@@ -36,6 +37,7 @@ from pricing import compute_chat_cost, compute_embed_cost, compute_vision_cost
 from providers.embed import build_embedder
 from providers.llm import build_llm
 from providers.vision import build_vision
+from providers.whisper import build_whisper
 
 log = logging.getLogger(__name__)
 
@@ -91,14 +93,22 @@ async def run_job(job_id: str, url: str, settings: Settings, jobs_root: Path) ->
                     manifest, jobs_root,
                     status="error",
                     progress="",
-                    error="This video has no captions. Whisper fallback is on the v2 roadmap.",
+                    error=(
+                        "This video has no captions available from YouTube. "
+                        "Set WHISPER_FALLBACK=1 in .env to transcribe locally with Whisper."
+                    ),
                 )
                 return
-            raise RuntimeError("Whisper fallback enabled but not implemented in v1.")
-
-        # ── Stage 2: parse + dedupe captions ───────────────────────────────
-        _update(manifest, jobs_root, progress="parsing captions")
-        cues = dedupe_rolling(parse_vtt(vtt))
+            # ── Stage 2 (fallback): transcribe audio with Whisper ──────────
+            _update(manifest, jobs_root, progress="extracting audio for Whisper")
+            audio_path = extract_audio(video, job_dir / "audio.wav")
+            _update(manifest, jobs_root, progress="transcribing audio (Whisper)")
+            transcriber = build_whisper(settings)
+            cues = await transcriber.transcribe(audio_path)
+        else:
+            # ── Stage 2: parse + dedupe captions ───────────────────────────
+            _update(manifest, jobs_root, progress="parsing captions")
+            cues = dedupe_rolling(parse_vtt(vtt))
 
         # ── Stage 3: extract + dedupe frames ───────────────────────────────
         _update(manifest, jobs_root, progress="extracting frames")

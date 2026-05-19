@@ -31,6 +31,7 @@ PRICES: dict[str, ModelPrice] = {
     "gpt-4o":             ModelPrice(prompt_per_million=2.50, completion_per_million=10.00),
     # Vision
     # (gpt-4o-mini is dual-use; same price table entry as above)
+    "meta-llama/Llama-Vision-Free": ModelPrice(prompt_per_million=0.0, completion_per_million=0.0),
     # Embeddings — Jina charges per token; image tokens depend on tile count.
     "jina-embeddings-v4": ModelPrice(prompt_per_million=0.0, completion_per_million=0.0, embed_per_million=0.18),
 }

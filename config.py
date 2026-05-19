@@ -58,6 +58,7 @@ class Settings(BaseSettings):
 
     # Feature flags
     whisper_fallback: bool = Field(default=False, alias="WHISPER_FALLBACK")
+    whisper_model: str = Field(default="base.en", alias="WHISPER_MODEL")
 
 
 def get_settings() -> Settings:
