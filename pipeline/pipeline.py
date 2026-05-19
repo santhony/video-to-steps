@@ -27,7 +27,7 @@ from pipeline.audio import extract_audio
 from pipeline.caption_winners import caption_winners
 from pipeline.captions import dedupe_rolling, parse_vtt
 from pipeline.download import download_video_and_captions
-from pipeline.frames import FixedFpsExtractor
+from pipeline.frames import FixedFpsExtractor, thumbnail_for_embedding
 from pipeline.llm_outline import llm_outline
 from pipeline.llm_refine import llm_refine
 from pipeline.match import match
@@ -122,10 +122,15 @@ async def run_job(job_id: str, url: str, settings: Settings, jobs_root: Path) ->
             )
 
         # ── Stage 4: embed every frame ─────────────────────────────────────
+        # Thumbnail to ~224px first: most multimodal embedders (CLIP-family,
+        # Jina v4) work well at 224px and pay ~10x less in token cost. The
+        # full-resolution frames stay on disk for the result page.
         _update(manifest, jobs_root, progress="embedding frames")
         embedder = build_embedder(settings)
-        frame_paths = [f.path for f in frames]
-        frame_res = await embedder.embed_images(frame_paths)
+        thumb_paths = thumbnail_for_embedding(
+            [f.path for f in frames], job_dir / "embed_thumbs"
+        )
+        frame_res = await embedder.embed_images(thumb_paths)
         np.save(job_dir / "frame_embeddings.npy", frame_res.vectors)
 
         # ── Stage 5: outline ──────────────────────────────────────────────

@@ -116,3 +116,28 @@ class SceneChangeExtractor:
             "SceneChangeExtractor is a v2 roadmap item. "
             "Use FixedFpsExtractor for v1."
         )
+
+
+def thumbnail_for_embedding(
+    paths: list[Path],
+    out_dir: Path,
+    *,
+    max_dim: int = 224,
+) -> list[Path]:
+    """Generate small thumbnails for embedding; preserves source order.
+
+    The display pipeline (server result page) keeps the original 720p
+    frames. Multimodal embeddings (CLIP, Jina v4) only need ~224px to
+    produce good vectors, and the per-image token cost on token-billed
+    providers (e.g., Jina free tier at 100K/min) scales with pixel area.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out: list[Path] = []
+    for src in paths:
+        dst = out_dir / src.name
+        with Image.open(src) as img:
+            img = img.convert("RGB")
+            img.thumbnail((max_dim, max_dim))
+            img.save(dst, "JPEG", quality=82)
+        out.append(dst)
+    return out

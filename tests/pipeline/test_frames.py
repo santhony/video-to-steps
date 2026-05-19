@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from pipeline.frames import FixedFpsExtractor, _phash_filter
+from pipeline.frames import FixedFpsExtractor, _phash_filter, thumbnail_for_embedding
 
 
 def _make_static(path: Path, seconds: int = 4) -> None:
@@ -149,3 +149,25 @@ def test_scene_change_extractor_is_a_v2_stub(tmp_path: Path) -> None:
     with pytest.raises(NotImplementedError) as exc:
         SceneChangeExtractor().extract(tmp_path / "x.mp4", tmp_path / "out")
     assert "v2" in str(exc.value).lower()
+
+
+def test_thumbnail_for_embedding_resizes_preserves_order(tmp_path: Path) -> None:
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    src_paths = []
+    for i in range(3):
+        p = src_dir / f"{i:04d}.jpg"
+        Image.new("RGB", (1280, 720), color=(i * 50, 100, 200)).save(p, "JPEG")
+        src_paths.append(p)
+
+    out_dir = tmp_path / "thumbs"
+    result = thumbnail_for_embedding(src_paths, out_dir, max_dim=224)
+
+    assert len(result) == 3
+    for src, dst in zip(src_paths, result):
+        assert dst.name == src.name
+        with Image.open(dst) as img:
+            assert img.size[0] <= 224 and img.size[1] <= 224
+        # Source unchanged
+        with Image.open(src) as src_img:
+            assert src_img.size == (1280, 720)

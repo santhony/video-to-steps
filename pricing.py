@@ -27,6 +27,8 @@ class ModelPrice:
 PRICES: dict[str, ModelPrice] = {
     # Text LLM
     "deepseek-chat":      ModelPrice(prompt_per_million=0.27, completion_per_million=1.10),
+    "deepseek-v4-flash":  ModelPrice(prompt_per_million=0.07, completion_per_million=0.28),
+    "deepseek-v4-pro":    ModelPrice(prompt_per_million=0.55, completion_per_million=2.19),
     "gpt-4o-mini":        ModelPrice(prompt_per_million=0.15, completion_per_million=0.60),
     "gpt-4o":             ModelPrice(prompt_per_million=2.50, completion_per_million=10.00),
     # Vision

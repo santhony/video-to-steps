@@ -16,6 +16,7 @@ I/O interface.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 from pathlib import Path
 from typing import Any
@@ -71,20 +72,36 @@ class JinaEmbedder:
         await self._client.aclose()
 
     async def _post_batch(self, inputs: list[dict[str, Any]]) -> tuple[np.ndarray, int]:
-        """Post a batch of inputs to Jina API and return vectors + token count."""
+        """Post a batch of inputs to Jina; retry on 429 honoring Retry-After.
+
+        Up to 5 retries with exponential backoff (max 60s sleep). Honors the
+        provider's `Retry-After` header when present; otherwise uses 2^n
+        seconds. Any non-429 4xx/5xx raises immediately.
+        """
         body = {
             "model": self._model,
             "input": inputs,
             "normalized": True,
         }
-        resp = await self._client.post(self._url, json=body)
-        resp.raise_for_status()
-        data = resp.json()
-        rows = [item["embedding"] for item in data.get("data", [])]
-        vectors = np.asarray(rows, dtype=np.float32)
-        usage = data.get("usage") or {}
-        tokens = int(usage.get("total_tokens", 0))
-        return vectors, tokens
+        for attempt in range(5):
+            resp = await self._client.post(self._url, json=body)
+            if resp.status_code != 429:
+                resp.raise_for_status()
+                data = resp.json()
+                rows = [item["embedding"] for item in data.get("data", [])]
+                vectors = np.asarray(rows, dtype=np.float32)
+                usage = data.get("usage") or {}
+                tokens = int(usage.get("total_tokens", 0))
+                return vectors, tokens
+            # 429: honor Retry-After (seconds) or fall back to exponential.
+            retry_after = resp.headers.get("Retry-After")
+            try:
+                sleep_s = float(retry_after) if retry_after else min(2 ** (attempt + 1), 60)
+            except ValueError:
+                sleep_s = min(2 ** (attempt + 1), 60)
+            await asyncio.sleep(sleep_s)
+        resp.raise_for_status()  # final raise after retries exhausted
+        raise RuntimeError("unreachable")  # for type-checkers
 
     async def embed_images(self, paths: list[Path]) -> EmbedResult:
         """Embed a list of image paths."""

@@ -26,10 +26,11 @@ from config import Settings
 from pipeline.pipeline import run_job
 from pipeline.storage import read_json, write_json_atomic
 
-# NetKnots short instructional video: Bowline knot tutorial (~2 min)
-# Channel: NetKnots (knot-tying educational content)
-# Video: "How to tie a Bowline Knot" — clear step-by-step instruction
-INSTRUCTIONAL_VIDEO_URL = "https://www.youtube.com/watch?v=8VVXqQv2WUk"
+# Global Cycling Network: "How To True A Bicycle Wheel" (~3:51)
+# Picked because the original NetKnots URL (8VVXqQv2WUk) was removed.
+# Has clear step-by-step narration; YouTube blocks caption fetch (PO token),
+# so this URL exercises the Whisper fallback path with WHISPER_FALLBACK=1.
+INSTRUCTIONAL_VIDEO_URL = "https://www.youtube.com/watch?v=tP3uAy1YQpQ"
 
 
 class TestCaptionlessVideoErrorPath:
@@ -171,7 +172,9 @@ class TestUnknownModelPricingZero:
             def extract(self, video_path, frames_dir):
                 frames_dir.mkdir(exist_ok=True)
                 frame_path = frames_dir / "0001.jpg"
-                frame_path.write_bytes(b"")
+                # Real JPEG so the thumbnail step (PIL.Image.open) succeeds.
+                from PIL import Image
+                Image.new("RGB", (32, 32), color=(0, 0, 0)).save(frame_path, "JPEG")
                 return [StubFrame(index=0, timestamp=2.5, path=frame_path)]
 
         @dataclass(slots=True)

@@ -108,7 +108,12 @@ async def _refine_one(
                     {"role": "system", "content": sys_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
-                max_tokens=300,
+                # 1500 covers the visible content (1-3 sentences, ~150 tokens)
+                # PLUS the hidden reasoning_content that DeepSeek-v4 and similar
+                # reasoning models emit (often 500-1200 tokens). Trimming this
+                # too low yields empty content. Cheap models can override via
+                # settings.llm_max_tokens.
+                max_tokens=1500,
                 response_format={"type": "json_object"},
             )
             instruction = _parse_instruction(result.text) or outline.brief
