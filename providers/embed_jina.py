@@ -84,7 +84,7 @@ class JinaEmbedder:
     async def embed_images(self, paths: list[Path]) -> EmbedResult:
         """Embed a list of image paths."""
         if not paths:
-            return EmbedResult(vectors=np.zeros((0, 0), dtype=np.float32), billable_tokens=0)
+            raise ValueError("embed_images requires at least one path")
 
         all_vectors: list[np.ndarray] = []
         total_tokens = 0
@@ -101,7 +101,7 @@ class JinaEmbedder:
     async def embed_texts(self, texts: list[str]) -> EmbedResult:
         """Embed a list of text strings."""
         if not texts:
-            return EmbedResult(vectors=np.zeros((0, 0), dtype=np.float32), billable_tokens=0)
+            raise ValueError("embed_texts requires at least one text")
 
         all_vectors: list[np.ndarray] = []
         total_tokens = 0

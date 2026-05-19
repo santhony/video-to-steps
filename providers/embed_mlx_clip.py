@@ -50,15 +50,19 @@ class MlxClipEmbedder:
 
     async def embed_images(self, paths: list[Path]) -> EmbedResult:
         """Embed a list of image paths."""
+        if not paths:
+            raise ValueError("embed_images requires at least one path")
         # mlx_clip's API is synchronous; we run it inline since v1 does not
         # exercise this path under load. If/when Mode A becomes a test
         # target, wrap in asyncio.to_thread.
         rows = [self._mlx_clip.image_encoder(str(p)) for p in paths]
-        vectors = np.asarray(rows, dtype=np.float32) if rows else np.zeros((0, 0), dtype=np.float32)
+        vectors = np.asarray(rows, dtype=np.float32)
         return EmbedResult(vectors=_l2_normalize(vectors), billable_tokens=0)
 
     async def embed_texts(self, texts: list[str]) -> EmbedResult:
         """Embed a list of text strings."""
+        if not texts:
+            raise ValueError("embed_texts requires at least one text")
         rows = [self._mlx_clip.text_encoder(t) for t in texts]
-        vectors = np.asarray(rows, dtype=np.float32) if rows else np.zeros((0, 0), dtype=np.float32)
+        vectors = np.asarray(rows, dtype=np.float32)
         return EmbedResult(vectors=_l2_normalize(vectors), billable_tokens=0)

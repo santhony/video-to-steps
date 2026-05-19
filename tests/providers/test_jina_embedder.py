@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import httpx
 import numpy as np
@@ -151,3 +151,17 @@ async def test_jina_embedder_batching():
     # Total vectors should be 5
     assert result.vectors.shape[0] == 5
     assert result.vectors.shape[1] == 2048
+
+
+@pytest.mark.asyncio
+async def test_jina_embedder_empty_input_raises():
+    """I-1: empty input raises ValueError instead of returning (0, 0) shape."""
+    embedder = JinaEmbedder(api_key="test-key")
+
+    with pytest.raises(ValueError, match="embed_images requires at least one path"):
+        await embedder.embed_images([])
+
+    with pytest.raises(ValueError, match="embed_texts requires at least one text"):
+        await embedder.embed_texts([])
+
+    await embedder.aclose()
