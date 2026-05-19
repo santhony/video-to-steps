@@ -116,30 +116,23 @@ async def test_vision_captioner_strips_think_tags():
 
 
 @pytest.mark.asyncio
-async def test_vision_captioner_factory():
-    """VisionCaptioner can be instantiated via build_vision or direct kwargs."""
-    # This test verifies the factory pattern works
+async def test_vision_captioner_factory_via_build_vision():
+    """build_vision factory constructs VisionCaptioner from Settings."""
     from config import Settings
     from providers.vision import build_vision
 
-    def transport(request: httpx.Request) -> httpx.Response:
-        response_data = build_openai_vision_response(["test"], usage={"prompt_tokens": 1, "completion_tokens": 1})
-        return httpx.Response(
-            status_code=200,
-            content=response_data,
-            headers={"content-type": "text/event-stream"},
-        )
-
-    # Direct instantiation
-    direct = VisionCaptioner(
-        base_url="https://api.openai.com",
-        path="/v1/chat/completions",
-        api_key="test-key",
-        model="gpt-4o-mini",
-        _transport=httpx.MockTransport(transport),
+    # Build a Settings instance with test configuration.
+    settings = Settings(
+        vision_api_key="test-key",
+        vision_model="gpt-4o-mini",
+        vision_base_url="https://api.openai.com",
+        vision_path="/v1/chat/completions",
     )
-    assert isinstance(direct, VisionCaptioner)
-    await direct.aclose()
+
+    captioner = build_vision(settings)
+    assert isinstance(captioner, VisionCaptioner)
+    assert captioner.name == "gpt-4o-mini"
+    await captioner.aclose()
 
 
 @pytest.mark.asyncio

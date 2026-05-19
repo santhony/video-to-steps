@@ -5,7 +5,6 @@ Set RUN_CLOUD_TESTS=1 to override and run cloud tests.
 """
 
 import os
-import pytest
 
 
 def pytest_collection_modifyitems(config, items):

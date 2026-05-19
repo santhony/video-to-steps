@@ -14,7 +14,6 @@ from providers.embed_jina import JinaEmbedder
 
 def build_jina_response(num_vectors: int, dim: int = 2048) -> dict:
     """Build a Jina API response with synthetic embeddings."""
-    import json
 
     data = []
     for _ in range(num_vectors):

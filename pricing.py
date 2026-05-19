@@ -36,6 +36,8 @@ PRICES: dict[str, ModelPrice] = {
 }
 
 
+# Module-scoped: warnings dedupe within a single Python process. Tests that
+# care about exact warning emission should use unique model names.
 _warned: set[str] = set()
 
 
