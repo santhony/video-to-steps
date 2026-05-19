@@ -113,8 +113,8 @@ class VisionCaptioner:
                     # qwen-vl streaming-raw text path (unusual for vision but tolerate).
                     text_parts.append(payload)
                     continue
-                choices = obj.get("choices") or []
-                if choices:
+                choices = obj.get("choices")
+                if isinstance(choices, list) and choices:
                     delta = choices[0].get("delta") or {}
                     content = delta.get("content")
                     if content:

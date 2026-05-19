@@ -17,10 +17,11 @@ def build_openai_vision_response(content_chunks: list[str], usage: dict | None =
     """Build an OpenAI-shape SSE response for vision caption."""
     lines: list[str] = []
     for chunk in content_chunks:
-        lines.append(f'data: {{"choices":[{{"delta":{{"content":"{chunk}"}}}}]}}\n')
+        payload = json.dumps({"choices": [{"delta": {"content": chunk}}]})
+        lines.append(f"data: {payload}\n")
     if usage is not None:
-        usage_json = json.dumps(usage)
-        lines.append(f'data: {{"choices":[], "usage": {usage_json}}}\n')
+        usage_json = json.dumps({"choices": [], "usage": usage})
+        lines.append(f"data: {usage_json}\n")
     lines.append("data: [DONE]\n")
     return "\n".join(lines).encode("utf-8")
 
@@ -49,7 +50,7 @@ async def test_vision_captioner_returns_caption():
     result = await captioner.caption(FIXTURE)
 
     assert result.text == expected_caption
-    assert result.prompt_tokens >= 1
+    assert result.prompt_tokens == 42
     assert isinstance(result, CaptionResult)
     await captioner.aclose()
 
@@ -149,3 +150,32 @@ async def test_vision_captioner_reads_system_prompt():
     prompt = _system_prompt()
     assert "instructional video" in prompt
     assert len(prompt) > 0
+
+
+@pytest.mark.asyncio
+async def test_vision_captioner_handles_non_list_choices():
+    """I-2: If choices field is non-list (e.g., string), no AttributeError is raised."""
+    # Build a response where choices is a string instead of a list
+    payload = json.dumps({"choices": "stringy"})
+    response_data = f"data: {payload}\ndata: [DONE]\n".encode("utf-8")
+
+    def transport(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            status_code=200,
+            content=response_data,
+            headers={"content-type": "text/event-stream"},
+        )
+
+    captioner = VisionCaptioner(
+        base_url="https://api.openai.com",
+        path="/v1/chat/completions",
+        api_key="test-key",
+        model="gpt-4o-mini",
+        _transport=httpx.MockTransport(transport),
+    )
+
+    result = await captioner.caption(FIXTURE)
+
+    # Should return empty text without raising
+    assert result.text == ""
+    await captioner.aclose()
