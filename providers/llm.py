@@ -1,18 +1,24 @@
-"""LLMClient protocol + factory stub.
+"""LLMClient — async chat client with dual-stream SSE auto-detect.
 
-Concrete implementation lands in Phase 2. The contract:
-- `chat()` takes a list of OpenAI-style messages and returns the text plus
-  prompt/completion token counts so the orchestrator can sum cost.
-- `response_format` is an optional hint for providers that support
-  `{"type": "json_object"}`; clients tolerate providers that ignore it.
-- Returned text is ALWAYS stripped of any `<think>...</think>` reasoning
-  blocks the model may emit inline.
+Auto-detect rule: peek at the first non-empty `data:` payload after the
+stream opens. If it parses as a JSON object with a `choices` key, treat the
+stream as OpenAI-compatible (delta-token shape); otherwise treat each `data:`
+line as a literal next-token text (qwen-studio shape).
+
+`<think>...</think>` blocks are stripped unconditionally from the accumulated
+text before return. Some reasoning-tier providers (notably DeepSeek v4) emit
+chain-of-thought via a separate `reasoning_content` field on the delta —
+we ignore that field entirely; only `delta.content` accumulates.
 """
 
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any
+
+import httpx
 
 
 @dataclass(slots=True)
@@ -22,8 +28,41 @@ class ChatResult:
     completion_tokens: int
 
 
-class LLMClient(Protocol):
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+
+
+def _strip_think(text: str) -> str:
+    return _THINK_RE.sub("", text)
+
+
+class LLMClient:
     name: str
+
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        path: str,
+        api_key: str,
+        model: str,
+        max_tokens: int = 2048,
+        include_usage: bool = True,
+        timeout: float = 120.0,
+        _transport: httpx.BaseTransport | None = None,
+    ) -> None:
+        self.name = model
+        self._url = base_url.rstrip("/") + path
+        self._model = model
+        self._max_tokens = max_tokens
+        self._include_usage = include_usage
+        self._client = httpx.AsyncClient(
+            timeout=timeout,
+            headers={"Authorization": f"Bearer {api_key}"} if api_key else {},
+            transport=_transport,
+        )
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
 
     async def chat(
         self,
@@ -31,9 +70,68 @@ class LLMClient(Protocol):
         *,
         max_tokens: int | None = None,
         response_format: dict[str, Any] | None = None,
-    ) -> ChatResult: ...
+    ) -> ChatResult:
+        body: dict[str, Any] = {
+            "model": self._model,
+            "messages": messages,
+            "max_tokens": max_tokens or self._max_tokens,
+            "stream": True,
+        }
+        if self._include_usage:
+            # Ask OpenAI-shape providers to include usage in the final
+            # chunk. Some strict providers 400 on unknown top-level
+            # params (notably qwen-studio's raw-text SSE), so this is a
+            # configurable opt-out (LLM_INCLUDE_USAGE=0).
+            body["stream_options"] = {"include_usage": True}
+        if response_format is not None:
+            body["response_format"] = response_format
+
+        text_parts: list[str] = []
+        prompt_tokens = 0
+        completion_tokens = 0
+        shape: str | None = None  # "openai" | "qwen" once detected
+
+        async with self._client.stream("POST", self._url, json=body) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line or not line.startswith("data:"):
+                    continue
+                payload = line[5:].strip()
+                if payload == "[DONE]":
+                    break
+                if shape is None:
+                    shape = "openai" if (payload.startswith("{") and '"choices"' in payload) else "qwen"
+
+                if shape == "openai":
+                    try:
+                        obj = json.loads(payload)
+                    except json.JSONDecodeError:
+                        # Fall back to treating as raw — unlikely but harmless.
+                        text_parts.append(payload)
+                        continue
+                    choices = obj.get("choices") or []
+                    if choices:
+                        delta = choices[0].get("delta") or {}
+                        content = delta.get("content")
+                        if content:
+                            text_parts.append(content)
+                    usage = obj.get("usage")
+                    if isinstance(usage, dict):
+                        prompt_tokens = int(usage.get("prompt_tokens", 0))
+                        completion_tokens = int(usage.get("completion_tokens", 0))
+                else:  # qwen-studio: payload is the literal next-token text
+                    text_parts.append(payload)
+
+        text = _strip_think("".join(text_parts))
+        return ChatResult(text=text, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
 
 
-def build_llm(settings: Any) -> LLMClient:
-    """Returns a configured LLMClient. Implemented in Phase 2."""
-    raise NotImplementedError("LLMClient factory implemented in Phase 2")
+def build_llm(settings: Any) -> "LLMClient":
+    return LLMClient(
+        base_url=settings.llm_base_url,
+        path=settings.llm_path_chat,
+        api_key=settings.llm_api_key,
+        model=settings.llm_model,
+        max_tokens=settings.llm_max_tokens,
+        include_usage=settings.llm_include_usage,
+    )
