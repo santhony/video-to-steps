@@ -85,3 +85,16 @@ def test_slice_finds_balanced_brackets_inside_strings():
 def test_parse_outline_raises_on_unrecoverable():
     with pytest.raises(ValueError):
         _parse_outline("no JSON in here at all")
+
+
+@pytest.mark.asyncio
+async def test_outline_none_brief_becomes_empty_string():
+    # Regression test for Issue #4: defense-in-depth gap.
+    # When the LLM returns brief=null, we should get "" not the string "None".
+    canned = '[{"index":0,"start":0,"end":60,"brief":null},' \
+             '{"index":1,"start":60,"end":120,"brief":"cook"}]'
+    llm = _StubLLM(canned_text=canned)
+    outlines, _ = await llm_outline(_cues_for_3min_video(), llm)
+    assert len(outlines) == 2
+    assert outlines[0].brief == ""  # None should become "", not "None"
+    assert outlines[1].brief == "cook"
