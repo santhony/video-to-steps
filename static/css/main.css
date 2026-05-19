@@ -18,5 +18,8 @@ button { padding: 0.6em 1.2em; font-size: 1rem; background: var(--accent); color
 .steps          { padding-left: 1.4em; }
 .steps li       { margin: 1.2em 0; }
 .instruction    { font-size: 1.05em; }
+.step-link      { font-size: 0.9em; margin: 0.2em 0 0.4em 0; }
+.step-link a    { color: var(--accent); text-decoration: none; }
+.step-link a:hover { text-decoration: underline; }
 .frame-grid     { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 6px; margin-top: 0.4em; }
 .frame-grid img { width: 100%; height: auto; border-radius: 4px; }

@@ -14,6 +14,13 @@
 {% for step in steps %}
   <li>
     <p class="instruction">{{ step.instruction }}</p>
+    {% if step_links[loop.index0] %}
+      <p class="step-link">
+        <a href="{{ step_links[loop.index0] }}" target="_blank" rel="noopener noreferrer">
+          Watch this step in the original video ↗
+        </a>
+      </p>
+    {% endif %}
     <div class="frame-grid">
       {% for frame in step.frames %}
         <a href="/job/{{ manifest.job_id }}/frame/{{ '%04d' % (frame.index + 1) }}.jpg">

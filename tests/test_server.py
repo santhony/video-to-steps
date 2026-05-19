@@ -137,7 +137,7 @@ async def test_result_page_renders_steps_and_meta(jobs_root):
     job_id = "ef56ef56ef56"
     ensure_job_dir(jobs_root, job_id)
     m = Manifest(
-        job_id=job_id, url="https://youtu.be/x",
+        job_id=job_id, url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
         status="done", mode="cloud",
         config_snapshot={
             "embed_backend": "jina_v4", "llm_model": "deepseek-chat",
@@ -155,7 +155,7 @@ async def test_result_page_renders_steps_and_meta(jobs_root):
             {"index": 1, "start": 10.0, "end": 20.0,
              "instruction": "Slice the onion. Add to pan.",
              "frames": [{"index": 14, "timestamp": 14.0, "path": "/x/0015.jpg"}]},
-            {"index": 2, "start": 20.0, "end": 30.0,
+            {"index": 2, "start": 20.5, "end": 30.0,
              "instruction": "Stir. Serve.",
              "frames": [{"index": 24, "timestamp": 24.0, "path": "/x/0025.jpg"}]},
         ],
@@ -177,6 +177,13 @@ async def test_result_page_renders_steps_and_meta(jobs_root):
     assert "deepseek-chat" in r.text
     # Alt text uses caption when present.
     assert 'alt="hands over a pan"' in r.text
+    # Per-step deep links to the source video — open in new tab.
+    # Jinja2 escapes & → &amp; in attribute values; browsers decode both.
+    assert 'href="https://www.youtube.com/watch?v=dQw4w9WgXcQ&amp;t=0s"' in r.text
+    assert 'href="https://www.youtube.com/watch?v=dQw4w9WgXcQ&amp;t=10s"' in r.text
+    assert 'href="https://www.youtube.com/watch?v=dQw4w9WgXcQ&amp;t=20s"' in r.text  # 20.5 truncates to 20
+    assert 'target="_blank"' in r.text
+    assert 'rel="noopener noreferrer"' in r.text
 
 
 @pytest.mark.asyncio
@@ -262,3 +269,27 @@ async def test_unknown_job_id_404(jobs_root):
     async with await _client() as c:
         r = await c.get("/job/fedcfedcfedc/status")
     assert r.status_code == 404
+
+
+def test_video_deep_link_for_watch_url():
+    from server import _video_deep_link
+    assert (_video_deep_link("https://www.youtube.com/watch?v=dQw4w9WgXcQ", 42.7)
+            == "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s")
+
+
+def test_video_deep_link_for_shortlink():
+    from server import _video_deep_link
+    assert (_video_deep_link("https://youtu.be/dQw4w9WgXcQ", 15)
+            == "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=15s")
+
+
+def test_video_deep_link_clamps_negative_and_truncates_decimal():
+    from server import _video_deep_link
+    assert _video_deep_link("https://youtu.be/dQw4w9WgXcQ", -3.0).endswith("&t=0s")
+    assert _video_deep_link("https://youtu.be/dQw4w9WgXcQ", 9.999).endswith("&t=9s")
+
+
+def test_video_deep_link_returns_none_for_non_youtube():
+    from server import _video_deep_link
+    assert _video_deep_link("https://example.com/some-video", 10) is None
+    assert _video_deep_link("", 10) is None

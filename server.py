@@ -55,6 +55,23 @@ def _is_valid_youtube_url(url: str) -> bool:
     return _YT_RE.search(url) is not None
 
 
+def _video_deep_link(manifest_url: str, t_sec: float) -> str | None:
+    """Build a canonical YouTube deep link to the given timestamp.
+
+    Returns None when the manifest URL doesn't contain a recognizable
+    11-char video id (defensive against malformed or non-YouTube inputs
+    that somehow bypassed `_is_valid_youtube_url`).
+    """
+    m = _YT_RE.search(manifest_url)
+    if m is None:
+        return None
+    video_id = m.group(1)
+    # YouTube's `t=` accepts integer seconds; decimals are silently
+    # truncated. Negative times are clamped to 0.
+    t = max(0, int(t_sec))
+    return f"https://www.youtube.com/watch?v={video_id}&t={t}s"
+
+
 def _new_job_id() -> str:
     return uuid.uuid4().hex[:12]
 
@@ -164,6 +181,8 @@ async def job_result(request: Request, job_id: str) -> HTMLResponse:
     steps = read_json(jobs_root / job_id / "steps.json")
     captions_path = jobs_root / job_id / "frame_captions.json"
     frame_captions = read_json(captions_path) if captions_path.exists() else {}
+    # Per-step deep links to the source video at the step's start time.
+    step_links = [_video_deep_link(m.get("url", ""), s.get("start", 0)) for s in steps]
     # vts-v1.AC8.5
     return templates.TemplateResponse(
         request,
@@ -172,6 +191,7 @@ async def job_result(request: Request, job_id: str) -> HTMLResponse:
             "manifest": _AttrDict(m),
             "steps": [_AttrDict(s) for s in steps],
             "frame_captions": frame_captions,
+            "step_links": step_links,
         },
     )
 
