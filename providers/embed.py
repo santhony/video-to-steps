@@ -35,5 +35,24 @@ class FrameExtractor(Protocol):
 
 
 def build_embedder(settings: Any) -> Embedder:
-    """Returns a configured Embedder. Implemented in Phase 2."""
-    raise NotImplementedError("Embedder factory implemented in Phase 2")
+    """Returns a configured Embedder based on settings.embed_backend.
+
+    Routes to JinaEmbedder for jina backends (jina_v4, jina, jina-v4) or
+    MlxClipEmbedder for mlx_clip backends. Raises ValueError for unknown
+    backends and RuntimeError if mlx_clip is not installed.
+    """
+    backend = (settings.embed_backend or "").strip().lower()
+    if backend in ("jina_v4", "jina", "jina-v4"):
+        from providers.embed_jina import JinaEmbedder
+        return JinaEmbedder(
+            api_key=settings.jina_api_key,
+            model=settings.jina_model,
+            batch=settings.jina_embed_batch,
+        )
+    if backend in ("mlx_clip", "mlx-clip", "mlx"):
+        from providers.embed_mlx_clip import MlxClipEmbedder  # may raise at instantiation
+        return MlxClipEmbedder(model=settings.mlx_clip_model)
+    raise ValueError(
+        f"Unknown EMBED_BACKEND={settings.embed_backend!r}. "
+        "Valid values: jina_v4, mlx_clip."
+    )
