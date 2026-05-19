@@ -12,7 +12,6 @@ Test structure:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import threading
@@ -26,7 +25,11 @@ import pytest
 from config import Settings
 from pipeline.pipeline import run_job
 from pipeline.storage import read_json, write_json_atomic
-from pipeline.types import Manifest
+
+# NetKnots short instructional video: Bowline knot tutorial (~2 min)
+# Channel: NetKnots (knot-tying educational content)
+# Video: "How to tie a Bowline Knot" — clear step-by-step instruction
+INSTRUCTIONAL_VIDEO_URL = "https://www.youtube.com/watch?v=8VVXqQv2WUk"
 
 
 class TestCaptionlessVideoErrorPath:
@@ -279,6 +282,10 @@ class TestUnknownModelPricingZero:
         assert cost.get("chat_usd") == 0.0, \
             f"Expected chat_usd=0.0 for unknown model, got {cost.get('chat_usd')}"
 
+        # Assert: AC7.1 sum-equality — total_usd equals sum of components
+        assert cost.get("total_usd") == cost.get("chat_usd", 0.0) + cost.get("vision_usd", 0.0) + cost.get("embed_usd", 0.0), \
+            f"AC7.1 sum-equality failed: total {cost.get('total_usd')} != chat {cost.get('chat_usd')} + vision {cost.get('vision_usd')} + embed {cost.get('embed_usd')}"
+
         # Assert: a warning was logged mentioning the model name
         warning_logs = [r for r in caplog.records if r.levelname == "WARNING"]
         model_warning_found = any(
@@ -304,43 +311,23 @@ class TestCloudIntegration:
         - Each step has >=1 frame and 1-3 sentence instruction
         - total_usd > 0
         - steps.json parses cleanly
+        - AC7.1: total_usd == chat_usd + vision_usd + embed_usd
 
         Manual check (AC1.3): human reviews printed step-frame mappings.
         """
-        # Skip this test in standard environments (no real API keys)
-        try:
-            from config import get_settings
-            settings = get_settings()
-            # Check if keys are configured
-            if not settings.llm_api_key or not settings.jina_api_key or not settings.vision_api_key:
-                pytest.skip("API keys not configured in .env")
-        except Exception:
-            pytest.skip("Could not load settings or API keys")
-
-        # Choose a short instructional video (hardcoded for reproducibility)
-        # This URL should be <= 3 minutes and show clear step-by-step process
-        # Example: a simple knot-tying or basic recipe video
-        # For now, we'll use a placeholder — replace with real URL during execution
-        video_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"  # Placeholder
-
-        pytest.skip(
-            "Cloud integration test placeholder. "
-            "Set RUN_CLOUD_TESTS=1, configure .env with real keys, "
-            "then replace video_url with a real instructional video and run."
-        )
-
-        # If we get here, run the test
         from config import get_settings
         settings = get_settings()
+        if not settings.llm_api_key or not settings.vision_api_key or not settings.jina_api_key:
+            pytest.skip("Cloud integration test requires LLM_API_KEY, VISION_API_KEY, JINA_API_KEY in .env")
 
         job_id = str(uuid.uuid4())
-        await run_job(job_id, video_url, settings, tmp_path)
+        await run_job(job_id=job_id, url=INSTRUCTIONAL_VIDEO_URL, settings=settings, jobs_root=tmp_path)
 
         # Assert: meta.json exists and status is done
         meta_path = tmp_path / job_id / "meta.json"
         assert meta_path.exists()
-        manifest = read_json(meta_path)
-        assert manifest["status"] == "done", f"Expected status=done, got {manifest['status']}"
+        meta = read_json(meta_path)
+        assert meta["status"] == "done", f"Expected status=done, got {meta['status']}"
 
         # Assert: steps.json exists and parses
         steps_path = tmp_path / job_id / "steps.json"
@@ -360,11 +347,15 @@ class TestCloudIntegration:
                 f"Step {step_idx} instruction has {len(sentences)} sentences, expected 1-3: {instruction}"
 
         # Assert: cost > 0
-        cost = manifest.get("cost", {})
+        cost = meta.get("cost", {})
         total_usd = cost.get("total_usd", 0.0)
         assert total_usd > 0.0, f"Expected total_usd > 0, got {total_usd}"
 
-        # Print step-frame mapping for manual AC1.3 verification
+        # AC7.1 sum-equality: total_usd equals sum of components
+        assert cost.get("total_usd") == pytest.approx(cost.get("chat_usd", 0.0) + cost.get("vision_usd", 0.0) + cost.get("embed_usd", 0.0)), \
+            f"AC7.1 sum-equality failed: total {cost.get('total_usd')} != chat {cost.get('chat_usd')} + vision {cost.get('vision_usd')} + embed {cost.get('embed_usd')}"
+
+        # Print step-frame mapping for manual AC1.3 review
         print("\n=== Manual Frame Relevance Check (AC1.3) ===")
         for step_idx, step in enumerate(steps):
             print(f"\nStep {step_idx}: {step.get('instruction', '')}")
