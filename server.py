@@ -42,6 +42,14 @@ _YT_RE = re.compile(
     r"([A-Za-z0-9_-]{11})"
 )
 
+_JOB_ID_RE = re.compile(r"^[a-f0-9]{12}$")
+
+
+def _guard_job_id(job_id: str) -> None:
+    """Validate job_id format. Raises HTTPException(400) if invalid."""
+    if not _JOB_ID_RE.fullmatch(job_id):
+        raise HTTPException(400, "Bad job id.")
+
 
 def _is_valid_youtube_url(url: str) -> bool:
     return _YT_RE.search(url) is not None
@@ -90,7 +98,6 @@ async def index(request: Request) -> HTMLResponse:
 
 @app.post("/process")
 async def process(
-    request: Request,
     background_tasks: BackgroundTasks,
     url: str = Form(...),
 ) -> RedirectResponse:
@@ -117,6 +124,7 @@ async def process(
 
 @app.get("/job/{job_id}", response_class=HTMLResponse)
 async def job_page(request: Request, job_id: str) -> HTMLResponse:
+    _guard_job_id(job_id)
     settings = get_settings()
     m = _load_manifest_dict(Path(settings.jobs_root), job_id)
     if m is None:
@@ -126,6 +134,7 @@ async def job_page(request: Request, job_id: str) -> HTMLResponse:
 
 @app.get("/job/{job_id}/status", response_class=HTMLResponse)
 async def job_status(request: Request, job_id: str) -> HTMLResponse:
+    _guard_job_id(job_id)
     settings = get_settings()
     m = _load_manifest_dict(Path(settings.jobs_root), job_id)
     if m is None:
@@ -142,6 +151,7 @@ async def job_status(request: Request, job_id: str) -> HTMLResponse:
 
 @app.get("/job/{job_id}/result", response_class=HTMLResponse)
 async def job_result(request: Request, job_id: str) -> HTMLResponse:
+    _guard_job_id(job_id)
     settings = get_settings()
     jobs_root = Path(settings.jobs_root)
     m = _load_manifest_dict(jobs_root, job_id)
@@ -168,6 +178,7 @@ async def job_result(request: Request, job_id: str) -> HTMLResponse:
 
 @app.get("/job/{job_id}/frame/{name}.jpg")
 async def job_frame(job_id: str, name: str) -> FileResponse:
+    _guard_job_id(job_id)
     settings = get_settings()
     # name is %04d; guard against traversal.
     if not name.isdigit() or len(name) != 4:
