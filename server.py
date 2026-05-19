@@ -42,7 +42,13 @@ _YT_RE = re.compile(
     r"([A-Za-z0-9_-]{11})"
 )
 
-_JOB_ID_RE = re.compile(r"^[a-f0-9]{12}$")
+# Two accepted shapes:
+#   1. `<11-char video id>_<6 hex>` — new format (since v1.2.1) so the URL
+#      reflects the source video without forcing operators to dig into
+#      the manifest to know which video a job pertains to.
+#   2. `<12 hex>` — legacy format from v1.0/1.1; preserved so jobs already
+#      on disk and their URLs remain valid after this change.
+_JOB_ID_RE = re.compile(r"^(?:[A-Za-z0-9_-]{11}_[a-f0-9]{6}|[a-f0-9]{12})$")
 
 
 def _guard_job_id(job_id: str) -> None:
@@ -72,7 +78,12 @@ def _video_deep_link(manifest_url: str, t_sec: float) -> str | None:
     return f"https://www.youtube.com/watch?v={video_id}&t={t}s"
 
 
-def _new_job_id() -> str:
+def _new_job_id(video_id: str | None = None) -> str:
+    """Allocate a job id. When `video_id` is the 11-char YouTube id, the
+    returned id is `<video_id>_<6 hex>` so the URL reflects the source
+    video. Falls back to plain 12-hex when no video id is supplied."""
+    if video_id:
+        return f"{video_id}_{uuid.uuid4().hex[:6]}"
     return uuid.uuid4().hex[:12]
 
 
@@ -127,7 +138,11 @@ async def process(
 
     settings = get_settings()
     jobs_root = Path(settings.jobs_root)
-    job_id = _new_job_id()
+    # Extract the YouTube video id (we already know URL matches _YT_RE)
+    # so the job id — and therefore the URL — surfaces it.
+    yt_match = _YT_RE.search(url)
+    video_id = yt_match.group(1) if yt_match else None
+    job_id = _new_job_id(video_id=video_id)
     ensure_job_dir(jobs_root, job_id)
 
     initial = Manifest(job_id=job_id, url=url, status="queued", progress="queued")

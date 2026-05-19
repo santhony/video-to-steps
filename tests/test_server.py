@@ -55,6 +55,8 @@ async def test_process_redirects_303_and_writes_manifest(jobs_root, stub_run_job
     assert r.headers["location"].startswith("/job/")
     job_id = r.headers["location"].rsplit("/", 1)[-1]
     assert (jobs_root / job_id / "meta.json").exists()
+    # Job id surfaces the source video id (new since v1.2.1).
+    assert job_id.startswith("dQw4w9WgXcQ_"), f"expected video id prefix in {job_id!r}"
 
 
 @pytest.mark.asyncio
@@ -293,3 +295,31 @@ def test_video_deep_link_returns_none_for_non_youtube():
     from server import _video_deep_link
     assert _video_deep_link("https://example.com/some-video", 10) is None
     assert _video_deep_link("", 10) is None
+
+
+def test_new_job_id_with_video_id_uses_prefix():
+    from server import _new_job_id, _JOB_ID_RE
+    jid = _new_job_id(video_id="dQw4w9WgXcQ")
+    assert jid.startswith("dQw4w9WgXcQ_")
+    assert _JOB_ID_RE.fullmatch(jid) is not None
+
+
+def test_new_job_id_without_video_id_falls_back_to_hex():
+    from server import _new_job_id, _JOB_ID_RE
+    jid = _new_job_id(video_id=None)
+    assert len(jid) == 12
+    assert _JOB_ID_RE.fullmatch(jid) is not None
+
+
+def test_job_id_regex_accepts_legacy_hex():
+    """Legacy 12-hex job ids on disk must keep routing after the upgrade."""
+    from server import _JOB_ID_RE
+    assert _JOB_ID_RE.fullmatch("abc123def456") is not None  # 12 hex
+
+
+def test_job_id_regex_rejects_garbage():
+    from server import _JOB_ID_RE
+    assert _JOB_ID_RE.fullmatch("dQw4w9WgXcQ") is None         # no discriminator
+    assert _JOB_ID_RE.fullmatch("dQw4w9WgXcQ_xyz") is None      # discriminator not hex
+    assert _JOB_ID_RE.fullmatch("../../../etc/passwd") is None  # traversal attempt
+    assert _JOB_ID_RE.fullmatch("toolong_abcdef") is None       # wrong vid length
