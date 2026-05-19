@@ -11,3 +11,4 @@ asyncio_mode = "auto"
 markers = [
     "cloud: tests that call cloud APIs; skipped unless RUN_CLOUD_TESTS=1",
 ]
+addopts = "-m 'not cloud' --strict-markers"
