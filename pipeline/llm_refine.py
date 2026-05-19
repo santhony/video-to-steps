@@ -15,34 +15,15 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from providers.llm import LLMClient
-from .types import Cue, Frame, Step, StepOutline
+from .types import Cue, Frame, Step, StepOutline, TokenUsage
+from ._prompts import load_system_user
 
 
 log = logging.getLogger(__name__)
 _PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "refine.md"
-
-
-@dataclass(slots=True)
-class ChatUsage:
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-
-
-def _load_prompt() -> tuple[str, str]:
-    """Load and parse the refine prompt template."""
-    text = _PROMPT_PATH.read_text(encoding="utf-8")
-    parts = re.split(r"^## User\s*$", text, maxsplit=1, flags=re.MULTILINE)
-    if len(parts) != 2:
-        raise RuntimeError(f"{_PROMPT_PATH} must contain a '## User' heading")
-    sys_part = re.sub(r"^## System\s*$", "", parts[0], flags=re.MULTILINE).strip()
-    user_part = parts[1].strip()
-    return sys_part, user_part
 
 
 def _cues_in_window(cues: list[Cue], start: float, end: float) -> list[Cue]:
@@ -113,7 +94,7 @@ async def _refine_one(
     sem: asyncio.Semaphore,
     sys_prompt: str,
     user_template: str,
-) -> tuple[Step, ChatUsage]:
+) -> tuple[Step, TokenUsage]:
     """Imperative Shell: Refine a single step via LLM call with per-step error recovery."""
     async with sem:
         user_prompt = user_template.format(
@@ -131,11 +112,11 @@ async def _refine_one(
                 response_format={"type": "json_object"},
             )
             instruction = _parse_instruction(result.text) or outline.brief
-            usage = ChatUsage(prompt_tokens=result.prompt_tokens, completion_tokens=result.completion_tokens)
+            usage = TokenUsage(prompt_tokens=result.prompt_tokens, completion_tokens=result.completion_tokens)
         except Exception as exc:  # noqa: BLE001
             log.warning("llm_refine step %d failed: %s; falling back to brief.", outline.index, exc)
             instruction = outline.brief
-            usage = ChatUsage()
+            usage = TokenUsage()
 
         return (
             Step(
@@ -157,16 +138,16 @@ async def llm_refine(
     llm: LLMClient,
     *,
     max_in_flight: int = 4,
-) -> tuple[list[Step], ChatUsage]:
+) -> tuple[list[Step], TokenUsage]:
     """Imperative Shell: Refine each StepOutline into a Step with polished instruction text.
 
     Concurrent fanout is bounded by max_in_flight semaphore to respect provider rate limits.
     Per-step failures degrade gracefully (fallback to brief), rather than aborting the run.
     """
-    sys_prompt, user_template = _load_prompt()
+    sys_prompt, user_template = load_system_user(_PROMPT_PATH)
     sem = asyncio.Semaphore(max_in_flight)
 
-    tasks: list[asyncio.Task[tuple[Step, ChatUsage]]] = []
+    tasks: list[asyncio.Task[tuple[Step, TokenUsage]]] = []
     for o in outlines:
         ws = winners_by_step.get(o.index, [])
         caps = [captions.get(f.index) for f in ws]
@@ -179,7 +160,7 @@ async def llm_refine(
     results = await asyncio.gather(*tasks)
     steps = [r[0] for r in results]
     steps.sort(key=lambda s: s.index)
-    total = ChatUsage()
+    total = TokenUsage()
     for _, u in results:
         total.prompt_tokens += u.prompt_tokens
         total.completion_tokens += u.completion_tokens
