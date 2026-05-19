@@ -12,7 +12,7 @@ if [ -f .env ]; then
   set +a
 fi
 
-mkdir -p "${JOBS_ROOT:-./data/jobs}"
+# Job directories are created on demand by pipeline.storage.ensure_job_dir().
 
 HOST="${APP_HOST:-127.0.0.1}"
 PORT="${APP_PORT:-8090}"
