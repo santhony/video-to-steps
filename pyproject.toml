@@ -1,0 +1,13 @@
+[project]
+name = "video-to-steps"
+version = "0.1.0"
+description = "YouTube instructional video → ordered illustrated step-by-step guide."
+requires-python = ">=3.11"
+readme = "README.md"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "cloud: tests that call cloud APIs; skipped unless RUN_CLOUD_TESTS=1",
+]
