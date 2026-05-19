@@ -38,7 +38,7 @@ def _to_jsonable(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [_to_jsonable(v) for v in value]
     if isinstance(value, set):
-        return [_to_jsonable(v) for v in sorted(value)]
+        return [_to_jsonable(v) for v in sorted(value, key=str)]
     return value
 
 
