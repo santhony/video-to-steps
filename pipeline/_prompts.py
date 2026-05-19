@@ -1,5 +1,10 @@
 """Shared prompt loading utilities for LLM passes.
 
+pattern: Imperative Shell
+Thin file-I/O helper: reads a prompt template from disk and splits it
+into (system, user) parts via pure regex. Used by llm_outline.py and
+llm_refine.py.
+
 Private module (leading underscore indicates project-internal use only).
 """
 
