@@ -30,12 +30,13 @@ def _ts_to_seconds(ts: str) -> float:
     return int(h) * 3600 + int(m) * 60 + int(s) + (int(ms or "0") / 1000.0)
 
 
-def parse_vtt(path: Path) -> list[Cue]:
+def parse_vtt(path: str | Path) -> list[Cue]:
     """Parses a .vtt file into a list of Cue, in file/temporal order.
 
     Newlines inside cue text are collapsed to spaces so downstream consumers
     see a single line per cue.
     """
+    path = Path(path)
     cues: list[Cue] = []
     for v in webvtt.read(str(path)):
         text = " ".join(v.text.splitlines()).strip()

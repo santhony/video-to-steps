@@ -55,10 +55,10 @@ def download_video_and_captions(url: str, job_dir: Path) -> tuple[Path, Path | N
     if video is None:
         raise RuntimeError(f"yt-dlp produced no video file in {job_dir}")
 
-    vtt = job_dir / "video.en.vtt"
-    if not vtt.exists():
+    vtt_path: Path | None = job_dir / "video.en.vtt"
+    if not vtt_path.exists():
         # Try alternate naming yt-dlp may use.
         alt = sorted(job_dir.glob("video*.vtt"))
-        vtt = alt[0] if alt else None  # type: ignore[assignment]
+        vtt_path = alt[0] if alt else None
 
-    return video, vtt if (vtt is not None and Path(vtt).exists()) else None
+    return video, vtt_path if (vtt_path is not None and vtt_path.exists()) else None

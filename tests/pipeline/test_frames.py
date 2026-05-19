@@ -94,7 +94,7 @@ def test_dedup_strictly_reduces_on_cut_heavy_video(cuts_video: Path, tmp_path: P
     n_dd = len(FixedFpsExtractor(fps=1.0, dedup=True, hamming_max=6).extract(cuts_video, out_dd))
     assert n_dd < n_all
     # Sanity: still at least one frame per visible segment.
-    assert n_dd >= 1
+    assert n_dd >= 4
 
 
 def test_dedup_equal_or_fewer_on_any_input(static_video: Path, tmp_path: Path) -> None:
