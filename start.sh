@@ -4,11 +4,25 @@ set -euo pipefail
 # shellcheck source=/dev/null
 source venv/bin/activate
 
-# Load .env if present (don't fail if missing — env vars may come from elsewhere).
+# Load .env if present. Variables already set in the parent shell take
+# precedence — this lets operators inject secrets at start time
+# (`LLM_API_KEY=... ./start.sh`) without editing .env, while .env still
+# supplies the default values for everything else.
 if [ -f .env ]; then
   set -a
-  # shellcheck source=/dev/null
-  . ./.env
+  while IFS= read -r _line; do
+    # Skip blank lines and comment-only lines.
+    [[ "$_line" =~ ^[[:space:]]*(#|$) ]] && continue
+    # Skip lines that aren't VAR=value shape.
+    [[ "$_line" != *=* ]] && continue
+    _key="${_line%%=*}"
+    _key="${_key// }"
+    # Only assign if the var is currently unset in the parent env.
+    if [ -z "${!_key+x}" ]; then
+      eval "$_line"
+    fi
+  done < .env
+  unset _line _key
   set +a
 fi
 
