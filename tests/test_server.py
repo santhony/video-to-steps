@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 
 import httpx
 import pytest
+from PIL import Image
 
 import server
 from pipeline.storage import ensure_job_dir, write_json_atomic
@@ -101,7 +101,7 @@ async def test_status_fragment_running(jobs_root):
 
 @pytest.mark.asyncio
 async def test_status_fragment_done_stops_polling(jobs_root):
-    job_id = "donedonedone"
+    job_id = "ab12ab12ab12"
     ensure_job_dir(jobs_root, job_id)
     m = Manifest(job_id=job_id, url="https://youtu.be/x", status="done",
                  cost=CostBreakdown(chat_usd=0.01, vision_usd=0.02, embed_usd=0.005, total_usd=0.035))
@@ -115,9 +115,26 @@ async def test_status_fragment_done_stops_polling(jobs_root):
 
 
 @pytest.mark.asyncio
+async def test_status_fragment_error_stops_polling(jobs_root):
+    job_id = "cd34cd34cd34"
+    ensure_job_dir(jobs_root, job_id)
+    m = Manifest(job_id=job_id, url="https://youtu.be/x", status="error",
+                 error="simulated failure", cost=CostBreakdown(total_usd=0.001))
+    write_json_atomic(jobs_root / job_id / "meta.json", m)
+    async with await _client() as c:
+        r = await c.get(f"/job/{job_id}/status")
+    assert r.status_code == 200
+    # Error message must be visible.
+    assert "Error" in r.text or "error" in r.text
+    assert "simulated failure" in r.text
+    # Polling must STOP for error status too.
+    assert 'hx-trigger="every 2s"' not in r.text
+
+
+@pytest.mark.asyncio
 async def test_result_page_renders_steps_and_meta(jobs_root):
     # vts-v1.AC8.5
-    job_id = "resultjob123"
+    job_id = "ef56ef56ef56"
     ensure_job_dir(jobs_root, job_id)
     m = Manifest(
         job_id=job_id, url="https://youtu.be/x",
@@ -164,7 +181,7 @@ async def test_result_page_renders_steps_and_meta(jobs_root):
 
 @pytest.mark.asyncio
 async def test_result_redirects_when_not_done(jobs_root):
-    job_id = "stillrunning"
+    job_id = "ab78ab78ab78"
     ensure_job_dir(jobs_root, job_id)
     m = Manifest(job_id=job_id, url="https://youtu.be/x", status="running")
     write_json_atomic(jobs_root / job_id / "meta.json", m)
@@ -175,7 +192,73 @@ async def test_result_redirects_when_not_done(jobs_root):
 
 
 @pytest.mark.asyncio
-async def test_unknown_job_id_404(jobs_root):
+async def test_frame_route_serves_jpeg(jobs_root):
+    job_id = "cd56cd56cd56"
+    ensure_job_dir(jobs_root, job_id)
+    # Create a tiny JPEG image.
+    frames_dir = jobs_root / job_id / "frames"
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    img = Image.new("RGB", (100, 100), color="red")
+    img.save(frames_dir / "0001.jpg", "JPEG")
+
     async with await _client() as c:
-        r = await c.get("/job/doesnotexist00/status")
+        r = await c.get(f"/job/{job_id}/frame/0001.jpg")
+    assert r.status_code == 200
+    assert "image/jpeg" in r.headers.get("content-type", "")
+
+
+@pytest.mark.asyncio
+async def test_frame_route_rejects_bad_name(jobs_root):
+    job_id = "ef78ef78ef78"
+    ensure_job_dir(jobs_root, job_id)
+    # Reject frame names that aren't exactly 4 digits.
+    async with await _client() as c:
+        r = await c.get(f"/job/{job_id}/frame/abcd.jpg")
+    assert r.status_code == 400
+
+    async with await _client() as c:
+        r = await c.get(f"/job/{job_id}/frame/12345.jpg")
+    assert r.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_frame_route_404_when_missing(jobs_root):
+    job_id = "ab90ab90ab90"
+    ensure_job_dir(jobs_root, job_id)
+    # Create frames dir but no file.
+    (jobs_root / job_id / "frames").mkdir(parents=True, exist_ok=True)
+
+    async with await _client() as c:
+        r = await c.get(f"/job/{job_id}/frame/9999.jpg")
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_job_routes_reject_invalid_job_id(jobs_root):
+    # All /job/{job_id}/* routes should reject bad job_id format.
+    bad_job_id = "invalid-job-id"
+
+    async with await _client() as c:
+        r = await c.get(f"/job/{bad_job_id}/status")
+    assert r.status_code == 400
+
+    async with await _client() as c:
+        r = await c.get(f"/job/{bad_job_id}/result")
+    assert r.status_code == 400
+
+    async with await _client() as c:
+        r = await c.get(f"/job/{bad_job_id}/frame/0001.jpg")
+    assert r.status_code == 400
+
+    # Also test the job_page route.
+    async with await _client() as c:
+        r = await c.get(f"/job/{bad_job_id}")
+    assert r.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_unknown_job_id_404(jobs_root):
+    # Use a valid job_id format (hex) for a job that doesn't exist.
+    async with await _client() as c:
+        r = await c.get("/job/fedcfedcfedc/status")
     assert r.status_code == 404
