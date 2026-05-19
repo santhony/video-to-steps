@@ -43,3 +43,30 @@ def parse_vtt(path: Path) -> list[Cue]:
             continue
         cues.append(Cue(start=_ts_to_seconds(v.start), end=_ts_to_seconds(v.end), text=text))
     return cues
+
+
+def _norm(text: str) -> str:
+    return " ".join(text.lower().split())
+
+
+def dedupe_rolling(cues: list[Cue]) -> list[Cue]:
+    """Collapses YouTube rolling-repeat auto-captions into stable cues.
+
+    Adjacent cues where one's normalized text is a prefix of the other's
+    are merged: the longer text wins, and the merged cue's `end` is the
+    later of the two `end`s.
+    """
+    if not cues:
+        return []
+
+    out: list[Cue] = [cues[0]]
+    for cue in cues[1:]:
+        last = out[-1]
+        a, b = _norm(last.text), _norm(cue.text)
+        if a == b or a.startswith(b) or b.startswith(a):
+            # Same content; keep the longer text and extend the time range.
+            keep_text = last.text if len(last.text) >= len(cue.text) else cue.text
+            out[-1] = Cue(start=last.start, end=max(last.end, cue.end), text=keep_text)
+        else:
+            out.append(cue)
+    return out
