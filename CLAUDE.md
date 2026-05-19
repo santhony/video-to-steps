@@ -22,8 +22,8 @@ plans at `docs/implementation-plans/2026-05-18-vts-v1/`.
 ## Commands
 - `./setup.sh` — create `venv/` and install deps (uses `uv` to fetch
   Python 3.11 if the host has older).
-- `./start.sh` — launch uvicorn (PID in `data/server.pid`, log in
-  `data/server.log`).
+- `./start.sh` — launch uvicorn (PID in `.vts.pid` in repo root; no log
+  file is written — uvicorn output goes to stdout of the parent shell).
 - `./stop.sh` — graceful shutdown via the PID file.
 - `python -m pytest` — runs the offline test suite (cloud tests are
   marked `@pytest.mark.cloud` and skipped unless `RUN_CLOUD_TESTS=1`).
@@ -60,7 +60,9 @@ Every non-trivial module declares its half at the top of its docstring:
   `pipeline/captions.py`, `pipeline/frames.py`, `pipeline/llm_outline.py`,
   `pipeline/llm_refine.py`.
 - **Imperative Shell**: `pipeline/pipeline.py`, `pipeline/caption_winners.py`,
-  `pipeline/_prompts.py`, `server.py`, everything in `providers/`.
+  `pipeline/_prompts.py`, `pipeline/captions.py`, `pipeline/download.py`,
+  `pipeline/frames.py`, `pipeline/storage.py`, all files in `providers/`,
+  and `server.py`.
 
 Pure logic stays free of I/O; the shell composes it with HTTP, disk, and
 ffmpeg.
