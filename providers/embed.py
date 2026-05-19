@@ -21,13 +21,13 @@ class EmbedResult:
 
 
 class Embedder(Protocol):
-    def name(self) -> str: ...
+    name: str
     async def embed_images(self, paths: list[Path]) -> EmbedResult: ...
     async def embed_texts(self, texts: list[str]) -> EmbedResult: ...
 
 
 class FrameExtractor(Protocol):
-    def name(self) -> str: ...
+    name: str
 
     def extract(self, video: Path, out_dir: Path) -> list:
         """Returns a list[pipeline.types.Frame]. Implementations in Phase 3."""
