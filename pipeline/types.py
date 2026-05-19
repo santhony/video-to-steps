@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 
-@dataclass(slots=True)
+@dataclass
 class Cue:
     """A single timed caption segment parsed from a VTT track."""
     start: float          # seconds
@@ -20,7 +20,7 @@ class Cue:
     text: str
 
 
-@dataclass(slots=True)
+@dataclass
 class Frame:
     """One extracted still frame, located in time."""
     index: int            # 0-based ordinal within the frame set
@@ -28,7 +28,7 @@ class Frame:
     path: Path            # absolute path to the .jpg
 
 
-@dataclass(slots=True)
+@dataclass
 class StepOutline:
     """LLM Pass 1 output — coarse step boundary + brief description."""
     index: int            # 0-based ordinal
@@ -37,7 +37,7 @@ class StepOutline:
     brief: str            # ≤ 1 sentence describing the step
 
 
-@dataclass(slots=True)
+@dataclass
 class Step:
     """LLM Pass 2 output — polished step text + selected illustrating frames."""
     index: int
@@ -47,7 +47,7 @@ class Step:
     frames: list[Frame] = field(default_factory=list)
 
 
-@dataclass(slots=True)
+@dataclass
 class TokenUsage:
     """Billable-token counts for a single provider call."""
     prompt_tokens: int = 0
@@ -55,7 +55,7 @@ class TokenUsage:
     embed_tokens: int = 0
 
 
-@dataclass(slots=True)
+@dataclass
 class CostBreakdown:
     """Running cost totals for a job, in USD."""
     chat_usd: float = 0.0
@@ -64,7 +64,7 @@ class CostBreakdown:
     total_usd: float = 0.0
 
 
-@dataclass(slots=True)
+@dataclass
 class Manifest:
     """Per-job record persisted to meta.json.
 
