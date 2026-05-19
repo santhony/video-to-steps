@@ -9,7 +9,7 @@ Manifest lifecycle:
 - 'done' → set on successful completion
 - 'error' → set in the outer try/except OR by the captionless-video early-return
 
-Pattern: Imperative Shell
+pattern: Imperative Shell
 This module coordinates I/O operations (stage invocations) and manifest
 persistence while pure logic lives in earlier phases. The orchestrator is
 responsible for error handling, state transitions, and cost accumulation.
@@ -18,7 +18,6 @@ responsible for error handling, state transitions, and cost accumulation.
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
@@ -106,6 +105,12 @@ async def run_job(job_id: str, url: str, settings: Settings, jobs_root: Path) ->
         extractor = FixedFpsExtractor(fps=1.0, dedup=True, hamming_max=6)
         frames = extractor.extract(video, job_dir / "frames")
 
+        if len(frames) == 0:
+            raise RuntimeError(
+                "Video produced no usable frames after pHash dedup; "
+                "the source may be a static or all-black clip."
+            )
+
         # ── Stage 4: embed every frame ─────────────────────────────────────
         _update(manifest, jobs_root, progress="embedding frames")
         embedder = build_embedder(settings)
@@ -117,7 +122,7 @@ async def run_job(job_id: str, url: str, settings: Settings, jobs_root: Path) ->
         _update(manifest, jobs_root, progress="outlining steps")
         llm = build_llm(settings)
         outlines, outline_usage = await llm_outline(cues, llm)
-        write_json_atomic(job_dir / "outline.json", [asdict(o) for o in outlines])
+        write_json_atomic(job_dir / "outline.json", outlines)
 
         # ── Stage 6: embed step briefs ────────────────────────────────────
         _update(manifest, jobs_root, progress="embedding step briefs")
@@ -148,7 +153,7 @@ async def run_job(job_id: str, url: str, settings: Settings, jobs_root: Path) ->
         )
 
         # ── Stage 10: persist + accumulate cost ────────────────────────────
-        write_json_atomic(job_dir / "steps.json", [asdict(s) for s in steps])
+        write_json_atomic(job_dir / "steps.json", steps)
 
         chat_cost = (
             compute_chat_cost(settings.llm_model, outline_usage.prompt_tokens, outline_usage.completion_tokens)
