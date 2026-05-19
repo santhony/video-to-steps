@@ -3,38 +3,25 @@
 Robust against providers that ignore `response_format=json_object`: after
 the chat call, we try strict `json.loads(text)` first, then fall through to
 a slice-fallback that locates the outermost `[...]` array and parses that.
+
+pattern: Imperative Shell
+This module orchestrates I/O (LLM chat calls) with functional core logic
+(prompt formatting, JSON parsing, transcript formatting). The core functions
+are pure and testable without I/O; the async orchestration handles the chat.
 """
 
 from __future__ import annotations
 
 import json
-import re
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from providers.llm import LLMClient
-from .types import Cue, StepOutline
+from .types import Cue, StepOutline, TokenUsage
+from ._prompts import load_system_user
 
 
 _PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "outline.md"
-
-
-@dataclass(slots=True)
-class ChatUsage:
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-
-
-def _load_prompt() -> tuple[str, str]:
-    text = _PROMPT_PATH.read_text(encoding="utf-8")
-    # Split on "## User" heading; everything before is system, after is user template.
-    parts = re.split(r"^## User\s*$", text, maxsplit=1, flags=re.MULTILINE)
-    if len(parts) != 2:
-        raise RuntimeError(f"{_PROMPT_PATH} must contain a '## User' heading")
-    sys_part = re.sub(r"^## System\s*$", "", parts[0], flags=re.MULTILINE).strip()
-    user_part = parts[1].strip()
-    return sys_part, user_part
 
 
 def _format_transcript(cues: list[Cue]) -> str:
@@ -95,9 +82,9 @@ def _parse_outline(text: str) -> list[dict[str, Any]]:
     raise ValueError(f"could not parse outline JSON from response: {text[:200]!r}...")
 
 
-async def llm_outline(cues: list[Cue], llm: LLMClient) -> tuple[list[StepOutline], ChatUsage]:
+async def llm_outline(cues: list[Cue], llm: LLMClient) -> tuple[list[StepOutline], TokenUsage]:
     """Calls the LLM once to divide cues into StepOutlines."""
-    sys_prompt, user_template = _load_prompt()
+    sys_prompt, user_template = load_system_user(_PROMPT_PATH)
     user_prompt = user_template.format(transcript=_format_transcript(cues))
 
     result = await llm.chat(
@@ -111,14 +98,20 @@ async def llm_outline(cues: list[Cue], llm: LLMClient) -> tuple[list[StepOutline
     raw_steps = _parse_outline(result.text)
     outlines: list[StepOutline] = []
     for i, s in enumerate(raw_steps):
+        # Defense against None: if brief is None/missing, default to ""; if non-string, str() it.
+        brief_val = s.get("brief")
+        if brief_val is None or isinstance(brief_val, str):
+            brief = (brief_val or "").strip()
+        else:
+            brief = str(brief_val).strip()
         outlines.append(
             StepOutline(
                 index=int(s.get("index", i)),
                 start=float(s["start"]),
                 end=float(s["end"]),
-                brief=str(s["brief"]).strip(),
+                brief=brief,
             )
         )
     # Re-sort by index, then start, to defend against models that drift.
     outlines.sort(key=lambda o: (o.index, o.start))
-    return outlines, ChatUsage(prompt_tokens=result.prompt_tokens, completion_tokens=result.completion_tokens)
+    return outlines, TokenUsage(prompt_tokens=result.prompt_tokens, completion_tokens=result.completion_tokens)
