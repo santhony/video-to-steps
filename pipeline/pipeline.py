@@ -31,7 +31,7 @@ from pipeline.frames import FixedFpsExtractor
 from pipeline.llm_outline import llm_outline
 from pipeline.llm_refine import llm_refine
 from pipeline.match import match
-from pipeline.storage import ensure_job_dir, read_json, write_json_atomic
+from pipeline.storage import ensure_job_dir, write_json_atomic
 from pipeline.types import CostBreakdown, Manifest
 from pricing import compute_chat_cost, compute_embed_cost, compute_vision_cost
 from providers.embed import build_embedder

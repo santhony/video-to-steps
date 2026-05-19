@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import pytest
 
 from pipeline.caption_winners import caption_winners
-from pipeline.types import Frame, TokenUsage
+from pipeline.types import Frame
 from providers.vision import CaptionResult
 
 
@@ -31,7 +31,7 @@ class StubCaptioner:
         # For this test stub, we don't have frame index info directly,
         # so we'll use a different approach: inject failures via a wrapper.
         return CaptionResult(
-            text=f"caption for frame",
+            text="caption for frame",
             prompt_tokens=10,
             completion_tokens=5,
         )
