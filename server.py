@@ -11,7 +11,7 @@ Routes:
 All disk reads go through pipeline.storage helpers so atomic writes
 guarantee parseable JSON.
 
-Pattern: Imperative Shell
+pattern: Imperative Shell
 """
 
 from __future__ import annotations

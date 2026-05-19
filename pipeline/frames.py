@@ -5,6 +5,11 @@ dedup pass.
 
 `SceneChangeExtractor` is a v2 stub — exposed so the FrameExtractor protocol
 shape is exercised, but it raises NotImplementedError on invocation.
+
+pattern: Imperative Shell
+This module orchestrates subprocess I/O (ffmpeg), file I/O (PIL.Image.open),
+and filesystem operations. Pure dedup logic is internal; the class exposes
+only the I/O-side interface.
 """
 
 from __future__ import annotations

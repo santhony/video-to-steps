@@ -7,6 +7,11 @@ without the dep.
 
 This class is NOT exercised in v1's acceptance smoke test. It exists so the
 README's "try Mode A on Macbook" path works without code changes.
+
+pattern: Imperative Shell
+This module performs I/O at instantiation (mlx_clip import) and during
+embed operations (numpy I/O, file reads). The class exposes only the
+async I/O interface.
 """
 
 from __future__ import annotations

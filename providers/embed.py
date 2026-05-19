@@ -3,6 +3,10 @@
 Embedder vectors MUST be float32, shape (n, d), L2-normalized. The protocol
 makes this explicit so cosine similarity reduces to a plain `frame_emb @
 step_emb`.
+
+pattern: Imperative Shell
+This module exposes Protocols and factory functions. The factory dynamically
+imports concrete embedder implementations; the protocols define the I/O contracts.
 """
 
 from __future__ import annotations

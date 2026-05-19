@@ -9,6 +9,11 @@ line as a literal next-token text (qwen-studio shape).
 text before return. Some reasoning-tier providers (notably DeepSeek v4) emit
 chain-of-thought via a separate `reasoning_content` field on the delta —
 we ignore that field entirely; only `delta.content` accumulates.
+
+pattern: Imperative Shell
+This module orchestrates HTTP I/O (httpx SSE streams) and response parsing.
+Pure regex and string manipulation logic is internal; the class exposes only
+the async I/O interface.
 """
 
 from __future__ import annotations

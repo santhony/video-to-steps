@@ -8,6 +8,11 @@ Distinct from LLMClient because:
 Per-frame failures (4xx/5xx from the provider, model refusal) bubble up as
 exceptions; the caller (pipeline/caption_winners.py in Phase 5) catches
 them and records caption=None for the affected frame.
+
+pattern: Imperative Shell
+This module orchestrates HTTP I/O (httpx SSE streams) and file I/O (prompt
+reading, image base64 encoding). Pure regex logic is internal; the class
+exposes only the async I/O interface.
 """
 
 from __future__ import annotations

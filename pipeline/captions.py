@@ -6,6 +6,10 @@ timestamps to float seconds and yields `Cue` instances in file order.
 `dedupe_rolling` collapses YouTube's two-line karaoke-style auto-caption
 pattern, where the same text appears across consecutive overlapping cues
 because the player needs to redraw a "current line" each tick.
+
+pattern: Imperative Shell
+This module performs file I/O (webvtt.read) and parsing logic. The pure
+logic is exposed as generators; the I/O is sequenced in the shell layer.
 """
 
 from __future__ import annotations

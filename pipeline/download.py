@@ -3,6 +3,10 @@
 Returns (video_path, vtt_path_or_None). The orchestrator (Phase 5) uses the
 None case to set status='error' with a clear message when WHISPER_FALLBACK
 is disabled.
+
+pattern: Imperative Shell
+This module orchestrates subprocess I/O (yt-dlp, filesystem discovery) with
+minimal logic. Video discovery filters out subtitle files to ensure correctness.
 """
 
 from __future__ import annotations
@@ -14,6 +18,29 @@ from typing import Any
 from yt_dlp import YoutubeDL
 
 log = logging.getLogger(__name__)
+
+# Subtitle extensions that may be picked up by glob("video.*") but should not be treated as video
+SUB_EXTS = {".vtt", ".srt", ".ass"}
+
+
+def _discover_video(job_dir: Path) -> Path | None:
+    """Discovers the video file in job_dir, excluding subtitle files.
+
+    Returns the first non-subtitle video.* file in sorted order, or None if
+    no video file is found.
+    """
+    video_candidates = [
+        c for c in sorted(job_dir.glob("video.*"))
+        if c.suffix.lower() not in SUB_EXTS and ".en." not in c.name
+    ]
+
+    # Prefer .mp4 if available
+    for c in video_candidates:
+        if c.suffix.lower() == ".mp4":
+            return c
+
+    # Fall back to the first non-subtitle file
+    return video_candidates[0] if video_candidates else None
 
 
 def download_video_and_captions(url: str, job_dir: Path) -> tuple[Path, Path | None]:
@@ -43,15 +70,7 @@ def download_video_and_captions(url: str, job_dir: Path) -> tuple[Path, Path | N
 
     # Find the artifacts. yt-dlp writes `video.mp4` and `video.en.vtt`
     # (subtitleslangs=['en'], subtitlesformat='vtt') alongside.
-    video_candidates = sorted(job_dir.glob("video.*"))
-    video: Path | None = None
-    for c in video_candidates:
-        if c.suffix.lower() == ".mp4":
-            video = c
-            break
-    if video is None and video_candidates:
-        # yt-dlp picked a non-mp4 container despite the format hint; accept it.
-        video = video_candidates[0]
+    video = _discover_video(job_dir)
     if video is None:
         raise RuntimeError(f"yt-dlp produced no video file in {job_dir}")
 

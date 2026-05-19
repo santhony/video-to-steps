@@ -3,6 +3,10 @@
 `write_json_atomic` writes to `path.tmp` then `os.replace(tmp, path)` — on
 POSIX this is a single rename inode operation, so concurrent readers (the
 HTMX status poll) see either the old or new file but never a torn write.
+
+pattern: Imperative Shell
+This module handles all file I/O (JSON serialization, atomic writes, directory
+creation). The pure JSON serialization logic is delegated to `_to_jsonable`.
 """
 
 from __future__ import annotations

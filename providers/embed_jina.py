@@ -7,6 +7,11 @@ objects. Vectors come back float32 (cast on receipt) and L2-normalized
 
 Batches are sized by `settings.jina_embed_batch` to stay within the API's
 per-request limits; results are concatenated in input order.
+
+pattern: Imperative Shell
+This module handles HTTP I/O (httpx) and embedding normalization. Pure
+vector normalization logic is internal; the class exposes only the async
+I/O interface.
 """
 
 from __future__ import annotations

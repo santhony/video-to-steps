@@ -6,7 +6,7 @@ window restriction respects each step's [start - pad, end + pad] span
 before scoring. When that window is empty, fall back to the single frame
 nearest the step midpoint.
 
-Pattern: Functional Core
+pattern: Functional Core
 """
 
 from __future__ import annotations

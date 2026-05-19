@@ -5,7 +5,7 @@ for multiple steps. Captions are persisted to `job_dir/frame_captions.json`
 keyed by frame index. Per-frame failures degrade to `captions[index] = None`
 and a warning log.
 
-Pattern: Imperative Shell
+pattern: Imperative Shell
 """
 
 from __future__ import annotations
