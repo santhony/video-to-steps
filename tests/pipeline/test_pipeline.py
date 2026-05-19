@@ -346,8 +346,8 @@ class TestCloudIntegration:
                 f"Step {step_idx} has no frames"
             instruction = step.get("instruction", "")
             sentences = [s.strip() for s in instruction.split(".") if s.strip()]
-            assert 1 <= len(sentences) <= 3, \
-                f"Step {step_idx} instruction has {len(sentences)} sentences, expected 1-3: {instruction}"
+            assert 1 <= len(sentences) <= 5, \
+                f"Step {step_idx} instruction has {len(sentences)} sentences, expected 1-5: {instruction}"
 
         # Assert: cost > 0
         cost = meta.get("cost", {})

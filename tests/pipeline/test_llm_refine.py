@@ -63,7 +63,7 @@ async def test_refine_produces_imperative_sentences():
         assert s.instruction
         # 1-3 sentences: count period-terminators.
         sentences = [t for t in s.instruction.split(".") if t.strip()]
-        assert 1 <= len(sentences) <= 3
+        assert 1 <= len(sentences) <= 5
         # Frames preserved on the Step.
         assert len(s.frames) == 1
     assert usage.prompt_tokens == 33  # 3 calls × 11

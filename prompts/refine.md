@@ -9,9 +9,9 @@ Output ONLY a JSON object of the form:
 ```
 
 Rules:
-- The `instruction` is 1–3 second-person imperative sentences telling the reader what to do during this step.
-- Mention specific tools, materials, or actions that appear in the cue snippets and frame captions provided.
-- Do not invent details not present in the inputs.
+- The `instruction` is 1–5 second-person imperative sentences telling the reader exactly what to do during this step.
+- Be specific. Include every concrete action, tool name, material, quantity, direction, and timing that appears in the cue snippets or frame captions for this step. Do not summarize away detail.
+- Do not introduce details that aren't present in the inputs.
 - Do not number the step. Do not output prose around the JSON.
 
 ## User

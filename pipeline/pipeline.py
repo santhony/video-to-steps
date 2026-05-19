@@ -37,7 +37,7 @@ from pricing import compute_chat_cost, compute_embed_cost, compute_vision_cost
 from providers.embed import build_embedder
 from providers.llm import build_llm
 from providers.vision import build_vision
-from providers.whisper import build_whisper
+from providers.whisper import NoSpeechDetectedError, build_whisper
 
 log = logging.getLogger(__name__)
 
@@ -104,7 +104,16 @@ async def run_job(job_id: str, url: str, settings: Settings, jobs_root: Path) ->
             audio_path = extract_audio(video, job_dir / "audio.wav")
             _update(manifest, jobs_root, progress="transcribing audio (Whisper)")
             transcriber = build_whisper(settings)
-            cues = await transcriber.transcribe(audio_path)
+            try:
+                cues = await transcriber.transcribe(audio_path)
+            except NoSpeechDetectedError as exc:
+                _update(
+                    manifest, jobs_root,
+                    status="error",
+                    progress="",
+                    error=str(exc),
+                )
+                return
         else:
             # ── Stage 2: parse + dedupe captions ───────────────────────────
             _update(manifest, jobs_root, progress="parsing captions")
