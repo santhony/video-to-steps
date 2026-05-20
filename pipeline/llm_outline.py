@@ -93,6 +93,11 @@ async def llm_outline(cues: list[Cue], llm: LLMClient) -> tuple[list[StepOutline
             {"role": "user", "content": user_prompt},
         ],
         response_format={"type": "json_object"},
+        # Outline is structured JSON extraction, not a reasoning task.
+        # qwen-studio + ds4-server honor `think=false` to skip the
+        # chain-of-thought trace — saves the bulk of generation time
+        # on local reasoning models. Cloud providers ignore the field.
+        extra_body={"think": False},
     )
 
     raw_steps = _parse_outline(result.text)

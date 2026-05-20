@@ -75,6 +75,7 @@ class LLMClient:
         *,
         max_tokens: int | None = None,
         response_format: dict[str, Any] | None = None,
+        extra_body: dict[str, Any] | None = None,
     ) -> ChatResult:
         body: dict[str, Any] = {
             "model": self._model,
@@ -90,6 +91,12 @@ class LLMClient:
             body["stream_options"] = {"include_usage": True}
         if response_format is not None:
             body["response_format"] = response_format
+        if extra_body:
+            # Provider-specific passthrough — used for qwen-studio's
+            # `think=false` on the outline pass. Cloud providers usually
+            # tolerate unknown top-level params; strict ones may 400, in
+            # which case the caller should leave extra_body unset.
+            body.update(extra_body)
 
         text_parts: list[str] = []
         prompt_tokens = 0

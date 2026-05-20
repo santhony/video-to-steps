@@ -43,6 +43,36 @@ def _l2_normalize(arr: np.ndarray) -> np.ndarray:
     return (arr / norms).astype(np.float32, copy=False)
 
 
+# CLIP's BPE vocabulary doesn't cover many Unicode glyphs common in
+# real-world instructional text (Vulgar Fractions block, typographic
+# quotes, en/em dashes, the degree sign). Hitting one of those raises
+# `KeyError: '⅜</w>'` from the tokenizer, which kills the embedding
+# call entirely. Map the most common offenders to ASCII before
+# tokenizing. Anything still outside vocab gets stripped at the end as
+# a defense in depth — better to lose the glyph than the whole step.
+_CLIP_TEXT_REWRITES = {
+    "½": "1/2", "⅓": "1/3", "⅔": "2/3", "¼": "1/4", "¾": "3/4",
+    "⅕": "1/5", "⅖": "2/5", "⅗": "3/5", "⅘": "4/5",
+    "⅙": "1/6", "⅚": "5/6", "⅛": "1/8", "⅜": "3/8", "⅝": "5/8", "⅞": "7/8",
+    "°": " degrees", "×": "x", "÷": "/", "±": "+/-",
+    "“": '"', "”": '"', "‘": "'", "’": "'",
+    "—": "-", "–": "-", "…": "...",
+    "′": "'", "″": '"',
+}
+
+
+def _sanitize_clip_text(text: str) -> str:
+    """ASCII-fold the Unicode glyphs CLIP's BPE vocab can't tokenize."""
+    for src, dst in _CLIP_TEXT_REWRITES.items():
+        if src in text:
+            text = text.replace(src, dst)
+    # Catch-all: drop anything outside Latin-1 — CLIP's English tokenizer
+    # can't represent CJK / emoji either, but those would silently degrade.
+    # `errors="ignore"` is intentional: if the glyph survives the explicit
+    # map above, lose it rather than fail the entire embed call.
+    return text.encode("ascii", errors="ignore").decode("ascii") or " "
+
+
 def _default_cache_dir(hf_repo: str) -> Path:
     """Pick a stable per-model cache dir under the user's cache.
 
@@ -110,7 +140,9 @@ class MlxClipEmbedder:
     async def embed_texts(self, texts: list[str]) -> EmbedResult:
         if not texts:
             raise ValueError("embed_texts requires at least one text")
-        # Same MLX-thread constraint as embed_images.
-        rows = [self._clip.text_encoder(t) for t in texts]
+        # Same MLX-thread constraint as embed_images. Sanitize each text
+        # first — CLIP's BPE vocab raises KeyError on common DIY glyphs
+        # like ⅜ that the model has never seen.
+        rows = [self._clip.text_encoder(_sanitize_clip_text(t)) for t in texts]
         vectors = np.asarray(rows, dtype=np.float32)
         return EmbedResult(vectors=_l2_normalize(vectors), billable_tokens=0)
