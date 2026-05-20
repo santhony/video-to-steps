@@ -101,11 +101,17 @@ class LLMClient:
             async for line in resp.aiter_lines():
                 if not line or not line.startswith("data:"):
                     continue
-                payload = line[5:].strip()
-                if payload == "[DONE]":
+                # SSE format uses a single-space separator after `data:`.
+                # Use removeprefix so we strip EXACTLY one space (the
+                # separator) and preserve any further leading whitespace
+                # that belongs to the content — qwen-studio's raw-text
+                # stream relies on those spaces between tokens.
+                payload = line.removeprefix("data: ").removeprefix("data:")
+                if payload.strip() == "[DONE]":
                     break
                 if shape is None:
-                    shape = "openai" if (payload.startswith("{") and '"choices"' in payload) else "qwen"
+                    stripped = payload.strip()
+                    shape = "openai" if (stripped.startswith("{") and '"choices"' in stripped) else "qwen"
 
                 if shape == "openai":
                     try:
@@ -124,8 +130,13 @@ class LLMClient:
                     if isinstance(usage, dict):
                         prompt_tokens = int(usage.get("prompt_tokens", 0))
                         completion_tokens = int(usage.get("completion_tokens", 0))
-                else:  # qwen-studio: payload is the literal next-token text
-                    text_parts.append(payload)
+                else:
+                    # qwen-studio raw shape: payload is the literal
+                    # next-token text. Newlines inside the token were
+                    # escaped on the sending side (`\n` -> literal `\n`
+                    # 2-char) so the SSE framing stayed intact. Unescape
+                    # them now so JSON / multiline content reads correctly.
+                    text_parts.append(payload.replace("\\n", "\n"))
 
         text = _strip_think("".join(text_parts))
         return ChatResult(text=text, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)

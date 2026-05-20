@@ -55,7 +55,8 @@ def build_embedder(settings: Any) -> Embedder:
         )
     if backend in ("mlx_clip", "mlx-clip", "mlx"):
         from providers.embed_mlx_clip import MlxClipEmbedder  # may raise at instantiation
-        return MlxClipEmbedder(model=settings.mlx_clip_model)
+        cache_dir = (settings.mlx_clip_cache_dir or "").strip() or None
+        return MlxClipEmbedder(model=settings.mlx_clip_model, cache_dir=cache_dir)
     raise ValueError(
         f"Unknown EMBED_BACKEND={settings.embed_backend!r}. "
         "Valid values: jina_v4, mlx_clip."

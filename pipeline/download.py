@@ -63,6 +63,13 @@ def download_video_and_captions(url: str, job_dir: Path) -> tuple[Path, Path | N
         "quiet": True,
         "no_warnings": True,
         "noprogress": True,
+        # YouTube extraction needs a JS runtime since the 2025 player rework.
+        # yt-dlp only enables `deno` by default; on Macs deno is rarely
+        # installed but Homebrew's `node` usually is, so accept either.
+        # If neither is present yt-dlp emits a warning and falls back to
+        # signature-free formats (typically itag 18: 360p mp4) which is
+        # fine for instructional video matching.
+        "js_runtimes": {"node": {}, "deno": {}},
     }
 
     with YoutubeDL(opts) as ydl:

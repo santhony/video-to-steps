@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from unittest.mock import Mock
 
 import pytest
@@ -50,11 +51,20 @@ def test_embed_factory_jina_dash_v4_alias():
     assert isinstance(embedder, JinaEmbedder)
 
 
-def test_embed_factory_mlx_clip_raises_on_linux():
-    """AC4.4: build_embedder raises RuntimeError for mlx_clip on Linux."""
+def test_embed_factory_mlx_clip_raises_when_mlx_clip_unavailable(monkeypatch):
+    """AC4.4: build_embedder raises RuntimeError for mlx_clip on hosts
+    where the dep isn't importable. Uses monkeypatch to simulate the
+    ImportError even on Apple Silicon hosts where the package may now
+    be installed in the project venv (which is the case on the dev
+    machine since v1.0)."""
+    # Stub mlx_clip to a sentinel that fails import (Python's import
+    # machinery treats `None` in sys.modules as cached ImportError).
+    monkeypatch.setitem(sys.modules, "mlx_clip", None)
+
     settings = Mock()
     settings.embed_backend = "mlx_clip"
     settings.mlx_clip_model = "openai/clip-vit-base-patch32"
+    settings.mlx_clip_cache_dir = ""
 
     with pytest.raises(RuntimeError, match=r"mlx_clip not installed"):
         build_embedder(settings)

@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     jina_model: str = Field(default="jina-embeddings-v4", alias="JINA_MODEL")
     jina_embed_batch: int = Field(default=64, alias="JINA_EMBED_BATCH")
     mlx_clip_model: str = Field(default="openai/clip-vit-base-patch32", alias="MLX_CLIP_MODEL")
+    # Optional explicit cache dir for mlx_clip's converted MLX weights.
+    # Empty (default) → ~/.cache/video-to-steps/mlx_clip/<model-slug>.
+    # First run downloads + converts from HF; subsequent runs reuse.
+    mlx_clip_cache_dir: str = Field(default="", alias="MLX_CLIP_CACHE_DIR")
 
     # Text LLM
     llm_base_url: str = Field(default="https://api.deepseek.com", alias="LLM_BASE_URL")
