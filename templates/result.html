@@ -1,6 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Result — {{ manifest.job_id }}{% endblock %}
+{% block title %}{{ manifest.title or manifest.job_id }}{% endblock %}
 {% block main %}
+{% if manifest.title %}
+<h1 class="video-title">{{ manifest.title }}</h1>
+<p class="job-id-line"><a href="{{ manifest.url }}" target="_blank" rel="noopener noreferrer">Source video ↗</a> · Job <code>{{ manifest.job_id }}</code></p>
+{% else %}
+<h1>Job {{ manifest.job_id }}</h1>
+{% endif %}
 <section class="meta">
   <small>
     Mode: {{ manifest.mode }} · Cost: ${{ '%.4f' % manifest.cost.total_usd }}

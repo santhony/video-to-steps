@@ -72,6 +72,7 @@ class Manifest:
     """
     job_id: str
     url: str
+    title: str = ""                    # video title from yt-dlp; populated after stage 1
     status: str = "queued"             # queued | running | done | error
     progress: str = ""                 # free-form short description of current stage
     error: str = ""                    # populated when status == "error"

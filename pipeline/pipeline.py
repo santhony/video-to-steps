@@ -85,7 +85,11 @@ async def run_job(job_id: str, url: str, settings: Settings, jobs_root: Path) ->
     try:
         # ── Stage 1: download ──────────────────────────────────────────────
         _update(manifest, jobs_root, progress="downloading video")
-        video, vtt = download_video_and_captions(url, job_dir)
+        video, vtt, title = download_video_and_captions(url, job_dir)
+        if title:
+            # Surface the title in the manifest so the status page shows
+            # the human-readable video name instead of just the job id.
+            _update(manifest, jobs_root, title=title)
 
         if vtt is None:
             if not settings.whisper_fallback:

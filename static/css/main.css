@@ -23,3 +23,6 @@ button { padding: 0.6em 1.2em; font-size: 1rem; background: var(--accent); color
 .step-link a:hover { text-decoration: underline; }
 .frame-grid     { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 6px; margin-top: 0.4em; }
 .frame-grid img { width: 100%; height: auto; border-radius: 4px; }
+.video-title    { margin: 0 0 0.2em 0; line-height: 1.25; }
+.job-id-line    { color: var(--muted); font-size: 0.85em; margin: 0 0 1em 0; }
+.job-id-line code { font-size: 0.9em; }

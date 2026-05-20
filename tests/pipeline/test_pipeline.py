@@ -42,10 +42,10 @@ class TestCaptionlessVideoErrorPath:
         orchestrator sets status=error with clear message mentioning captions and Whisper."""
 
         # Stub download to return video path but no captions
-        def stub_download(url: str, job_dir: Path) -> tuple[Path, Path | None]:
+        def stub_download(url: str, job_dir: Path) -> tuple[Path, Path | None, str]:
             video_path = job_dir / "video.mp4"
             video_path.touch()
-            return video_path, None
+            return video_path, None, "Stub Video"
 
         monkeypatch.setattr(
             "pipeline.pipeline.download_video_and_captions",
@@ -143,12 +143,12 @@ class TestUnknownModelPricingZero:
         3. Log a warning mentioning the model name"""
 
         # Stub all pipeline stages to no-op but return minimal valid outputs
-        def stub_download(url: str, job_dir: Path) -> tuple[Path, Path | None]:
+        def stub_download(url: str, job_dir: Path) -> tuple[Path, Path | None, str]:
             video_path = job_dir / "video.mp4"
             video_path.write_bytes(b"")
             vtt_path = job_dir / "video.vtt"
             vtt_path.write_text("WEBVTT\n\n00:00:01.000 --> 00:00:05.000\ntest caption\n")
-            return video_path, vtt_path
+            return video_path, vtt_path, "Stub Video"
 
         def stub_parse_vtt(vtt_path):
             from pipeline.types import Cue

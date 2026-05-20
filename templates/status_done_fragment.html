@@ -1,4 +1,10 @@
 <div id="status">
+  {% if manifest.title %}
+  <h2 class="video-title">{{ manifest.title }}</h2>
+  <p class="job-id-line">Job <code>{{ manifest.job_id }}</code></p>
+  {% else %}
+  <h2>Job {{ manifest.job_id }}</h2>
+  {% endif %}
   {% if manifest.status == "done" %}
     <p class="status status-done"><strong>Done.</strong></p>
     <p><a href="/job/{{ manifest.job_id }}/result">View result →</a></p>

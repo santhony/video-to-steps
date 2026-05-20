@@ -16,7 +16,9 @@ class _StubLLM:
     canned_text: str
     name: str = "stub"
 
-    async def chat(self, messages, *, max_tokens=None, response_format=None) -> ChatResult:
+    async def chat(
+        self, messages, *, max_tokens=None, response_format=None, extra_body=None,
+    ) -> ChatResult:
         return ChatResult(text=self.canned_text, prompt_tokens=42, completion_tokens=17)
 
 

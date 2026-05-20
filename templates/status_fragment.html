@@ -2,6 +2,12 @@
      hx-get="/job/{{ manifest.job_id }}/status"
      hx-trigger="every 2s"
      hx-swap="outerHTML">
+  {% if manifest.title %}
+  <h2 class="video-title">{{ manifest.title }}</h2>
+  <p class="job-id-line">Job <code>{{ manifest.job_id }}</code></p>
+  {% else %}
+  <h2>Job {{ manifest.job_id }}</h2>
+  {% endif %}
   <p class="status status-{{ manifest.status }}">
     <strong>Status:</strong> {{ manifest.status }}
     {% if manifest.progress %} — {{ manifest.progress }}{% endif %}

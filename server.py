@@ -187,7 +187,13 @@ async def job_page(request: Request, job_id: str) -> HTMLResponse:
     m = _load_manifest_dict(Path(settings.jobs_root), job_id)
     if m is None:
         raise HTTPException(404, "Unknown job id.")
-    return templates.TemplateResponse(request, "job.html", {"job_id": job_id})
+    # Pass the title (if any) so the page header shows the human-readable
+    # video name even before the first 2s HTMX poll fires.
+    return templates.TemplateResponse(
+        request,
+        "job.html",
+        {"job_id": job_id, "title": m.get("title", "") or ""},
+    )
 
 
 @app.get("/job/{job_id}/status", response_class=HTMLResponse)

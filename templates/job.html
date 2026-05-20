@@ -1,10 +1,15 @@
 {% extends "base.html" %}
 {% block main %}
-<h2>Job {{ job_id }}</h2>
 <div id="status"
      hx-get="/job/{{ job_id }}/status"
      hx-trigger="load, every 2s"
      hx-swap="outerHTML">
+  {% if title %}
+  <h2 class="video-title">{{ title }}</h2>
+  <p class="job-id-line">Job <code>{{ job_id }}</code></p>
+  {% else %}
+  <h2>Job {{ job_id }}</h2>
+  {% endif %}
   <p>Loading…</p>
 </div>
 {% endblock %}

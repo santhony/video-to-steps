@@ -43,11 +43,13 @@ def _discover_video(job_dir: Path) -> Path | None:
     return video_candidates[0] if video_candidates else None
 
 
-def download_video_and_captions(url: str, job_dir: Path) -> tuple[Path, Path | None]:
+def download_video_and_captions(url: str, job_dir: Path) -> tuple[Path, Path | None, str]:
     """Downloads the video MP4 (≤720p) and the English auto-caption VTT into job_dir.
 
     Returns:
-        (video_path, vtt_path) — vtt_path is None when no captions were available.
+        (video_path, vtt_path, title) — vtt_path is None when no captions
+        were available; title is the video title from yt-dlp's metadata
+        (empty string if extraction succeeded but the metadata lacked one).
     """
     job_dir.mkdir(parents=True, exist_ok=True)
     outtmpl = str(job_dir / "video.%(ext)s")
@@ -73,7 +75,11 @@ def download_video_and_captions(url: str, job_dir: Path) -> tuple[Path, Path | N
     }
 
     with YoutubeDL(opts) as ydl:
-        ydl.download([url])
+        # extract_info(..., download=True) does the same work as ydl.download
+        # but also returns the parsed info dict so we can read the title.
+        info = ydl.extract_info(url, download=True) or {}
+
+    title = (info.get("title") or "").strip()
 
     # Find the artifacts. yt-dlp writes `video.mp4` and `video.en.vtt`
     # (subtitleslangs=['en'], subtitlesformat='vtt') alongside.
@@ -87,4 +93,8 @@ def download_video_and_captions(url: str, job_dir: Path) -> tuple[Path, Path | N
         alt = sorted(job_dir.glob("video*.vtt"))
         vtt_path = alt[0] if alt else None
 
-    return video, vtt_path if (vtt_path is not None and vtt_path.exists()) else None
+    return (
+        video,
+        vtt_path if (vtt_path is not None and vtt_path.exists()) else None,
+        title,
+    )
