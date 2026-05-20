@@ -10,23 +10,60 @@ frames from the source video.
 
 ## How it works
 
-1. **Download** the video and its English auto-captions with `yt-dlp`.
-2. **Parse** the VTT into time-coded cues and collapse YouTube's rolling
-   repeats.
-3. **Extract frames** at 1 fps with `ffmpeg`, then drop near-duplicates by
-   perceptual-hash distance.
+1. **Download** the video and its English auto-captions with `yt-dlp`. If
+   the video has no captions and `WHISPER_FALLBACK=1` is set, transcribe
+   the audio locally with `faster-whisper` instead.
+2. **Parse** the VTT into time-coded cues and collapse YouTube's
+   rolling repeats — auto-captions emit the same line across many
+   consecutive timestamped cues; we keep the first occurrence and drop
+   any subsequent cue whose text is a prefix-or-equal of the previous
+   one (`pipeline/captions.py:dedupe_rolling`).
+3. **Extract frames** at 1 fps with `ffmpeg` (scaled to 720p), then drop
+   near-duplicates by perceptual-hash distance (Hamming threshold 6).
 4. **Embed** every kept frame into a multimodal vector space (default:
-   Jina v4).
-5. **Outline** the transcript into 3–12 coarse steps via an LLM call.
+   Jina v4; 1024-d, L2-normalized).
+5. **Outline** the transcript into 3–12 coarse steps via an LLM call
+   (`prompts/outline.md`). The prompt explicitly excludes intros,
+   outros, sponsor reads, and recap montages so the step list is
+   actionable only.
 6. **Match** the step briefs against the frame embeddings: per-step
-   cosine top-k inside the step's time window.
-7. **Caption** only the ~30 winning frames with a vision LLM (gpt-4o-mini
-   default). This is the expensive call — we reserve it for frames that
-   will appear on the result page.
+   cosine top-3 inside the step's time window, padded ±2 s on each end.
+   If the window is empty, fall back to the single frame nearest the
+   step's midpoint.
+7. **Caption** only the ~30 winning frames with a vision LLM
+   (`gpt-4o-mini` default; `prompts/vision_caption.md`). This is the
+   expensive call — we reserve it for frames that will appear on the
+   result page.
 8. **Refine** each step's text by feeding the brief, the matching cues,
-   and the winning-frame captions back into the LLM, asking for 1–3
-   second-person imperative sentences.
-9. Render the result page.
+   and the winning-frame captions back into the LLM
+   (`prompts/refine.md`), asking for 1–3 second-person imperative
+   sentences. `max_tokens=1500` to leave headroom for reasoning models'
+   chain-of-thought.
+9. Render the result page (each step deep-links back to its timestamp
+   in the source YouTube video).
+
+### Tunables
+
+The defaults above sit in `config.py` (env-overridable) and the prompt
+files in `prompts/`. The values most often worth changing:
+
+| Knob | Default | Where |
+|---|---|---|
+| Frame extraction fps | 1 | `pipeline/frames.py:FixedFpsExtractor` |
+| pHash dedup threshold | Hamming ≤ 6 | same |
+| Step-to-frame top-k | 3 | `pipeline/match.py` |
+| Step time window padding | ±2 s | `pipeline/match.py` |
+| Outline LLM max_tokens | `LLM_MAX_TOKENS` (default 2048) | `.env`; raise for long transcripts |
+| Refine LLM max_tokens | 1500 (hard-coded) | `pipeline/llm_refine.py` |
+| Vision LLM max_tokens | 300 | `VISION_MAX_TOKENS` |
+| LLM temperature | provider default (typically 1.0) | not overridden by this app |
+| Whisper model | `base.en` | `WHISPER_MODEL` |
+
+We do not set `temperature` or `seed` on outgoing LLM / vision calls
+— provider defaults apply. That's why two runs on the same URL can
+produce different step counts; if you need deterministic output for an
+evaluation, fork `providers/llm.py` and add `temperature: 0, seed: N`
+to the request body.
 
 ## Requirements
 
@@ -107,8 +144,11 @@ reverse proxy as above.
 ## Configuration: Modes
 
 Three deployment modes share the same code; the differences are
-environment-only. Mode C is the only one verified in v1; Mode A and Mode
-B are documented and code-pathed but **untested**.
+environment-only. Mode C is the v1 acceptance target. Mode A has been
+end-to-end smoke-tested on a single Apple Silicon machine (Qwen2.5-VL
+via `mlx-vlm` for vision, qwen-studio/DS4 for chat, mlx_clip for
+embeddings); Mode B (MLX CLIP locally + cloud LLM + cloud vision)
+remains code-pathed but **untested**.
 
 ### Mode C — Cloud (default; the only mode tested in v1)
 
@@ -132,7 +172,7 @@ Sub `gpt-4o-mini` with any OpenAI-shape vision endpoint;
 sub the LLM with any OpenAI-shape chat endpoint (DeepSeek and Together
 are tested shapes).
 
-### Mode A — Local (Macbook + qwen-studio + MLX CLIP). UNTESTED in v1.
+### Mode A — Local (Apple Silicon: mlx_clip + qwen-studio/DS4 + mlx-vlm)
 
 Requires an Apple Silicon Mac, `mlx_clip`
 (`pip install git+https://github.com/harperreed/mlx_clip`), and a
@@ -154,13 +194,18 @@ VISION_API_KEY=
 VISION_MODEL=qwen-vl
 ```
 
-**Caveats (v1):**
-- The `MlxClipEmbedder` and qwen-studio code paths are not exercised by
-  the v1 smoke test. Treat Mode A as "wired but not battle-tested."
-- If `mlx_clip` fails to install, you can fall back to Mode C against a
-  cloud Jina key with no code changes.
+**Notes:**
+- Smoke-tested on a 78-second knot-tying video and a 10-minute DIY
+  woodworking video on a single Apple Silicon machine. "Tested" here
+  means the pipeline completed end-to-end with sensible output, not
+  that the matching is benchmarked.
+- If `mlx_clip` fails to install on your host, fall back to Mode C
+  against a cloud Jina key with no code changes.
 - The qwen-studio `/chat` SSE shape is auto-detected by `LLMClient`
   alongside the OpenAI shape; you don't need to change a flag.
+- For DS4-style reasoning models routed through qwen-studio, set
+  `LLM_MAX_TOKENS` generously (we use 16000–80000 on long videos) —
+  the CoT trace shares the token budget with the visible content.
 
 ### Mode B — Hybrid (MLX CLIP local + cloud LLM + cloud vision). UNTESTED in v1.
 
@@ -201,6 +246,51 @@ A 30-minute video runs roughly 6× these numbers. Your mileage will vary
 with provider pricing changes — check `pricing.py` and update entries
 there when providers change rates.
 
+## Limitations
+
+This is a research-grade tool. The generated guides are useful, not
+authoritative. Specifically:
+
+- **Generated steps can be wrong.** The output is the product of an ASR
+  pass, two LLM passes, and a similarity-based frame match — each one a
+  source of error. Expect occasional missed steps, fused steps,
+  hallucinated tool names, and frames that depict something adjacent
+  rather than the action the text describes. Don't trust the output on
+  anything safety-critical (medication, electrical work, food
+  allergens) without verifying against the source video.
+
+- **Non-deterministic.** Re-running the same URL through the same
+  configuration will not produce the same step list, since the LLM
+  passes are sampling at temperature > 0 internally. Two runs on the
+  bowline tutorial in our testing produced 3 steps one time and 6
+  steps another.
+
+- **Captions are the input.** If YouTube's auto-captions are wrong,
+  the steps will be wrong in the same way. Whisper fallback
+  (`WHISPER_FALLBACK=1`, default off) avoids this by transcribing
+  locally — but on first use it downloads the `faster-whisper` weights
+  (~150 MB for `base.en`, larger for `small.en`/`medium.en`) and
+  smaller Whisper models trade accuracy for speed.
+
+- **Mode A and Mode B are not the v1 acceptance target.** Mode A has
+  been smoke-tested on one machine; Mode B has never run. Quality and
+  cost claims in this README are calibrated to Mode C.
+
+- **Mode C has no built-in rate or cost ceiling.** A 30-minute video
+  fans out ~30 vision-LLM calls per job (and more, if you raise top-k
+  or frame fps). The caption stage uses an asyncio semaphore capped at
+  16 concurrent (`CAPTION_MAX_IN_FLIGHT`) and retries 429s with
+  exponential backoff, but there is no monthly cap or alert. Watch
+  your provider dashboards.
+
+- **The vision-caption assumption is unaudited.** In Mode C the entire
+  step-to-frame match quality depends on the vision model producing
+  consistent, useful descriptions of each frame. We have not
+  systematically evaluated how different vision models (gpt-4o-mini
+  vs. Qwen2.5-VL vs. Pixtral, etc.) trade off on instructional-video
+  frames. Switching models is a config change, not a code change, so
+  experimentation is cheap.
+
 ## Troubleshooting
 
 **"mlx_clip not installed" RuntimeError**
@@ -208,8 +298,11 @@ You set `EMBED_BACKEND=mlx_clip` on a non-Apple-Silicon host. Use
 `EMBED_BACKEND=jina_v4` for Mode C or move to a Mac.
 
 **"This video has no captions" error on result page**
-The video has no auto-captions on YouTube. v1 fails fast in this case;
-Whisper fallback is on the v2 roadmap.
+The video has no auto-captions on YouTube. Set `WHISPER_FALLBACK=1` in
+`.env` to transcribe locally with `faster-whisper`. First run downloads
+the model weights (~150 MB for `base.en`, the default); subsequent
+runs reuse the cache. For better accuracy at higher CPU cost set
+`WHISPER_MODEL=small.en` or `medium.en`.
 
 **Vision model returns empty captions for some frames**
 Some providers refuse certain images (people, certain content).

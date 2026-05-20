@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "YouTube instructional video → ordered illustrated step-by-step guide."
 requires-python = ">=3.11"
 readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Sam Anthony" }]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

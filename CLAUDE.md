@@ -1,6 +1,6 @@
 # video-to-steps
 
-Last verified: 2026-05-19
+Last verified: 2026-05-20
 
 YouTube instructional video → ordered illustrated step-by-step guide. v1
 implementation lives on the `vts-v1` branch; design plan at
@@ -53,7 +53,23 @@ Whisper transcription fallback (no longer a v2 stub).
   extraction for the Whisper fallback lives in `audio.py`.
 - `prompts/` — markdown templates: `outline.md`, `refine.md`,
   `vision_caption.md`. The first two split on a `## User` heading via
-  `pipeline._prompts.load_system_user`.
+  `pipeline._prompts.load_system_user`. Per-prompt responsibilities:
+    - `outline.md` — system + user template for the outline pass.
+      Tells the LLM to emit a JSON array of `{index, start, end,
+      brief}` steps in second-person imperative voice, **excluding**
+      intros, outros, sponsor reads, cost summaries, and recap
+      montages. Aims for 3–12 actionable steps. Output validated as
+      `json_object` with a slice-fallback parser.
+    - `refine.md` — system + user template for the per-step refine
+      pass. One step at a time. Inputs: the outline `brief`, the cue
+      snippets in the step's time range, and the winner-frame
+      captions. Output: 1–3 second-person imperative sentences,
+      strict ban on third-person narration ("the host", "she
+      explains"), with bad-vs-good examples inline in the prompt.
+    - `vision_caption.md` — one-shot system + user for per-frame
+      captioning. Loaded directly by `providers/vision.py` (not via
+      `load_system_user`). Single-sentence description focused on
+      actions, tools, and materials.
 - `server.py` — FastAPI app (form, process, job page, status fragment,
   result page, frame).
 - `templates/`, `static/` — Jinja2 templates + vendored htmx/css.
@@ -170,7 +186,11 @@ manifest write):
      Both paths produce the same `list[Cue]` shape; downstream stages
      are identical.
 3. Extract frames @ 1 fps with pHash dedup (`FixedFpsExtractor`,
-   `hamming_max=6`).
+   `hamming_max=6`). Exact ffmpeg invocation:
+   `ffmpeg -y -i <video> -vf "fps=1,scale=-2:720" -qscale:v 4
+   <out_dir>/%04d.jpg`. The pHash filter then walks the produced
+   frames and drops any whose perceptual hash differs from the last
+   kept frame by ≤ 6 (`imagehash.phash`, Hamming distance).
 4. Thumbnail frames to ~224px via `pipeline.frames.thumbnail_for_embedding`
    into `embed_thumbs/`, then embed those thumbs
    (`embedder.embed_images`); save `frame_embeddings.npy`. The
