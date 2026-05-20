@@ -61,6 +61,29 @@ def _is_valid_youtube_url(url: str) -> bool:
     return _YT_RE.search(url) is not None
 
 
+def _normalize_url(raw: str) -> str:
+    """Trim whitespace and prepend `https://` if the user pasted a URL
+    without a scheme (e.g. `youtube.com/watch?v=…` or `youtu.be/…`).
+
+    Leaves explicit `http://` and `https://` URLs alone, including the
+    rare case of `http://` (some old YouTube embeds). Anything with a
+    different scheme (`ftp://`, `file://`, etc.) is not modified — it
+    will fail _YT_RE downstream and surface a 400 from /process.
+    """
+    s = raw.strip()
+    if not s:
+        return s
+    lower = s.lower()
+    if lower.startswith(("http://", "https://")):
+        return s
+    # Heuristic: if the user pasted something with a different scheme
+    # we leave it alone (it won't be a YouTube URL anyway). The check
+    # is "://" appears in the first 10 chars" — schemes are short.
+    if "://" in s[:10]:
+        return s
+    return "https://" + s
+
+
 def _video_deep_link(manifest_url: str, t_sec: float) -> str | None:
     """Build a canonical YouTube deep link to the given timestamp.
 
@@ -129,6 +152,9 @@ async def process(
     background_tasks: BackgroundTasks,
     url: str = Form(...),
 ) -> RedirectResponse:
+    # Normalize first so "youtu.be/ABC..." and "  www.youtube.com/watch?v=…  "
+    # pasted without a scheme reach the validator with `https://` prepended.
+    url = _normalize_url(url)
     if not _is_valid_youtube_url(url):
         # vts-v1.AC8.3
         raise HTTPException(

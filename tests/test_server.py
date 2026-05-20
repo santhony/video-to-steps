@@ -84,6 +84,21 @@ async def test_process_accepts_known_youtube_shapes(jobs_root, stub_run_job, goo
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("schemeless", [
+    "www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "youtube.com/watch?v=dQw4w9WgXcQ",
+    "youtu.be/dQw4w9WgXcQ",
+    "m.youtube.com/watch?v=dQw4w9WgXcQ",
+    "   https://www.youtube.com/watch?v=dQw4w9WgXcQ   ",  # whitespace tolerated too
+])
+async def test_process_auto_prepends_https(jobs_root, stub_run_job, schemeless):
+    """URLs pasted without a scheme are accepted; the server prepends https://."""
+    async with await _client() as c:
+        r = await c.post("/process", data={"url": schemeless}, follow_redirects=False)
+    assert r.status_code == 303, f"got {r.status_code} body={r.text[:200]}"
+
+
+@pytest.mark.asyncio
 async def test_status_fragment_running(jobs_root):
     # vts-v1.AC8.4
     job_id = "abc123abc123"

@@ -2,8 +2,12 @@
 {% block main %}
 <form method="post" action="/process">
   <label for="url">YouTube URL</label>
-  <input type="url" id="url" name="url" required
-         placeholder="https://www.youtube.com/watch?v=..." autofocus>
+  <!-- type=text (not type=url) so the browser doesn't reject schemeless
+       pastes like "youtu.be/..."; the server normalizes by prepending
+       https:// when no scheme is present. -->
+  <input type="text" id="url" name="url" required
+         placeholder="youtube.com/watch?v=... or youtu.be/..." autofocus
+         spellcheck="false" autocapitalize="off" autocorrect="off">
   <button type="submit">Make steps</button>
 </form>
 <p class="hint">Paste the URL of a short instructional video. We download
