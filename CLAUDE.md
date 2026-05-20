@@ -109,11 +109,14 @@ lookup; never call `.name()`.
   low the content field returns empty). `llm_refine` hard-codes
   `max_tokens=1500` for this reason (covers ~1200 reasoning + ~300
   visible content for a refined step); `llm_outline` uses
-  `settings.llm_max_tokens` for the longer outline pass. Since v1.3
-  the refine system prompt allows 1–5 imperative sentences per step
-  (was 1–3 in v1.0) with a specificity directive to keep concrete
-  tool names, quantities, and timing rather than summarizing them
-  away.
+  `settings.llm_max_tokens` for the longer outline pass. The refine
+  system prompt targets 1–3 second-person imperative sentences per
+  step with a specificity directive to keep concrete tool names,
+  quantities, direction, and timing rather than summarizing them away.
+  It also includes an explicit voice rule (with examples) that
+  forbids third-person descriptions of the on-screen person
+  ("the host", "the instructor", "she", etc.) — local models tend to
+  default to narrating the speaker without it.
 - **`providers.vision.VisionCaptioner`** — `async caption(image: Path)
   → CaptionResult`. OpenAI-shape only (no qwen-studio raw-text path);
   per-frame failures bubble up as exceptions and `caption_winners`
