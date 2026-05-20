@@ -109,7 +109,11 @@ lookup; never call `.name()`.
   low the content field returns empty). `llm_refine` hard-codes
   `max_tokens=1500` for this reason (covers ~1200 reasoning + ~300
   visible content for a refined step); `llm_outline` uses
-  `settings.llm_max_tokens` for the longer outline pass.
+  `settings.llm_max_tokens` for the longer outline pass. Since v1.3
+  the refine system prompt allows 1–5 imperative sentences per step
+  (was 1–3 in v1.0) with a specificity directive to keep concrete
+  tool names, quantities, and timing rather than summarizing them
+  away.
 - **`providers.vision.VisionCaptioner`** — `async caption(image: Path)
   → CaptionResult`. OpenAI-shape only (no qwen-studio raw-text path);
   per-frame failures bubble up as exceptions and `caption_winners`
@@ -134,7 +138,12 @@ lookup; never call `.name()`.
   is the only implementation in v1.1: lazy-imports `faster_whisper`,
   caches the model on the instance, runs sync inference via
   `asyncio.to_thread`. Defaults: `model="base.en"`, `device="cpu"`,
-  `compute_type="int8"`.
+  `compute_type="int8"`. Since v1.3 the transcriber raises
+  `NoSpeechDetectedError` (also exported from `providers.whisper`) when
+  the materialized segment list is empty OR avg `no_speech_prob` > 0.6;
+  the orchestrator catches it in Stage 2 and sets `status=error` with
+  a friendly message rather than letting hallucinated cues poison
+  downstream stages.
 
 The factories `build_llm`, `build_vision`, `build_embedder`, and
 `build_whisper` are the only sanctioned construction sites — the
@@ -204,10 +213,16 @@ by `llm_outline`, `llm_refine`, and `caption_winners` (NOT
   (terminal). Templates use `_AttrDict`-wrapped dicts for attribute
   syntax.
 - `GET /job/{id}/result` → result page; 303 back to job page if not
-  yet `done`.
+  yet `done`. Each step on the result page carries a "Watch this step
+  in the original video ↗" deep-link (built via `_video_deep_link`)
+  that opens the source YouTube URL at the step's `start` time in a
+  new tab (`target=_blank rel=noopener noreferrer`).
 - `GET /job/{id}/frame/{name}.jpg` → serve `data/jobs/<id>/frames/{name}.jpg`.
 
-Every route validates `job_id` via `_JOB_ID_RE = ^[a-f0-9]{12}$`. The
+Every route validates `job_id` via `_JOB_ID_RE`. Two accepted shapes:
+`<11-char video id>_<6 hex>` (current, e.g. `dQw4w9WgXcQ_a1b2c3` — so
+the URL itself names the source video) and `<12 hex>` (legacy v1.0/1.1
+form, preserved for backward compat with jobs already on disk). The
 frame route additionally requires `name` to be a 4-digit string. Bad
 input → 400, missing job → 404.
 
@@ -283,7 +298,8 @@ store. Manifest is the only source of truth for status.
 - Manifest writes only happen inside `pipeline.pipeline._update` (in
   the orchestrator) or directly in `server.py` for the initial
   `queued` state. Two writers, same atomic helper.
-- Job IDs match `^[a-f0-9]{12}$`. Frame filenames are 4-digit zero-pad.
+- Job IDs match `_JOB_ID_RE` in `server.py` — either `<11-char vid>_<6 hex>`
+  (current) or `<12 hex>` (legacy). Frame filenames are 4-digit zero-pad.
 - `pipeline._prompts.load_system_user` requires exactly one `## User`
   heading per prompt file; it raises `RuntimeError` otherwise.
 
