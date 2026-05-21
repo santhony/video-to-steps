@@ -34,6 +34,14 @@ class Settings(BaseSettings):
     # Empty (default) → ~/.cache/video-to-steps/mlx_clip/<model-slug>.
     # First run downloads + converts from HF; subsequent runs reuse.
     mlx_clip_cache_dir: str = Field(default="", alias="MLX_CLIP_CACHE_DIR")
+    # vision_caption (single-key) embedder: text-embedding endpoint that
+    # consumes captions produced by the vision LLM. Empty base_url/api_key
+    # → reuse the vision provider's base_url/api_key (OpenAI single-key
+    # case). Path defaults to /v1/embeddings if blank.
+    text_embed_base_url: str = Field(default="", alias="TEXT_EMBED_BASE_URL")
+    text_embed_path: str = Field(default="", alias="TEXT_EMBED_PATH")
+    text_embed_api_key: str = Field(default="", alias="TEXT_EMBED_API_KEY")
+    text_embed_model: str = Field(default="", alias="TEXT_EMBED_MODEL")
 
     # Text LLM
     llm_base_url: str = Field(default="https://api.deepseek.com", alias="LLM_BASE_URL")

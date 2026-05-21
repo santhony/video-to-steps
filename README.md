@@ -1,3 +1,15 @@
+---
+title: video-to-steps
+emoji: 🎬
+colorFrom: indigo
+colorTo: purple
+sdk: docker
+app_port: 8090
+pinned: false
+license: mit
+short_description: YouTube instructional video → illustrated step-by-step guide
+---
+
 # video-to-steps
 
 Turn a YouTube instructional-video URL into an ordered, illustrated
@@ -141,10 +153,47 @@ The container defaults to `APP_HOST=0.0.0.0` internally; the `-p
 127.0.0.1:8090:8090` ensures the published port is local-only. Add your
 reverse proxy as above.
 
+## Run on the cloud (Hugging Face Spaces)
+
+The non-technical path: one OpenAI key, a free Hugging Face account, and
+a Space duplication. The repository ships with the YAML header and
+`Dockerfile` that Spaces needs — no local install required.
+
+1. Sign in at <https://huggingface.co> and create an OpenAI API key at
+   <https://platform.openai.com/api-keys>. You will be charged by OpenAI
+   for each video processed; see "Cost expectations" below.
+2. Open this repository on Hugging Face and click **Duplicate this
+   Space** (or visit
+   `https://huggingface.co/new-space?template=<your-username>/video-to-steps`).
+   Choose the free CPU hardware tier.
+3. In the new Space's **Settings → Variables and secrets**, add:
+   - `OPENAI_API_KEY` (secret) — your OpenAI key.
+   - `EMBED_BACKEND` = `vision_caption`
+   - `LLM_BASE_URL` = `https://api.openai.com`
+   - `LLM_API_KEY` = `${OPENAI_API_KEY}`
+   - `LLM_MODEL` = `gpt-4o-mini`
+   - `VISION_BASE_URL` = `https://api.openai.com`
+   - `VISION_API_KEY` = `${OPENAI_API_KEY}`
+   - `VISION_MODEL` = `gpt-4o-mini`
+   - `TEXT_EMBED_MODEL` = `text-embedding-3-small`
+   - `APP_BASIC_AUTH_USER` and `APP_BASIC_AUTH_PASS` — pick a username
+     and a long random password. **Required.** Without these the Space
+     URL is open to the public and anyone can spend your OpenAI key.
+4. Restart the Space. Visit the Space's URL; your browser will prompt
+   for the basic-auth credentials.
+
+The Space sleeps when idle and wakes on the next request — the first
+request after sleep takes ~30s while the container restarts. Cost per
+video is whatever OpenAI bills you; expect a few cents per ~10 minute
+video on `gpt-4o-mini` + `text-embedding-3-small`. The single-key mode
+captions every kept frame instead of using a multimodal embedder, so
+long videos cost more here than the Jina-based Mode C does locally.
+
 ## Configuration: Modes
 
-Three deployment modes share the same code; the differences are
-environment-only. Mode C is the v1 acceptance target. Mode A has been
+Four deployment modes share the same code; the differences are
+environment-only. Mode C is the v1 acceptance target. Mode D is the
+single-key cloud deploy described above. Mode A has been
 end-to-end smoke-tested on a single Apple Silicon machine (Qwen2.5-VL
 via `mlx-vlm` for vision, qwen-studio/DS4 for chat, mlx_clip for
 embeddings); Mode B (MLX CLIP locally + cloud LLM + cloud vision)
@@ -206,6 +255,33 @@ VISION_MODEL=qwen-vl
 - For DS4-style reasoning models routed through qwen-studio, set
   `LLM_MAX_TOKENS` generously (we use 16000–80000 on long videos) —
   the CoT trace shares the token budget with the visible content.
+
+### Mode D — Single-key (OpenAI only; cloud / Spaces deploy)
+
+One key covers chat, vision, AND embeddings. `EMBED_BACKEND=vision_caption`
+captions each kept frame with the vision LLM and embeds the caption
+text, so no separate multimodal-embedding provider is needed.
+
+```bash
+EMBED_BACKEND=vision_caption
+TEXT_EMBED_MODEL=text-embedding-3-small
+# TEXT_EMBED_BASE_URL / TEXT_EMBED_API_KEY blank → reuse VISION_* (same key)
+
+LLM_BASE_URL=https://api.openai.com
+LLM_PATH_CHAT=/v1/chat/completions
+LLM_API_KEY=${OPENAI_API_KEY}
+LLM_MODEL=gpt-4o-mini
+
+VISION_BASE_URL=https://api.openai.com
+VISION_PATH_CHAT=/v1/chat/completions
+VISION_API_KEY=${OPENAI_API_KEY}
+VISION_MODEL=gpt-4o-mini
+```
+
+Trade-off: ~3–10× more vision-LLM calls than Mode C on long videos
+because every kept frame is captioned. The simplest path for a
+non-technical cloud user; see "Run on the cloud (Hugging Face Spaces)"
+above for the click-through instructions.
 
 ### Mode B — Hybrid (MLX CLIP local + cloud LLM + cloud vision). UNTESTED in v1.
 

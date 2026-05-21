@@ -21,10 +21,14 @@ import re
 import uuid
 from pathlib import Path
 
+import base64
+import secrets
+
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from config import get_settings
 from pipeline.pipeline import run_job
@@ -138,6 +142,47 @@ class _AttrDict(dict):
 
 
 app = FastAPI(title="video-to-steps")
+
+
+class BasicAuthMiddleware(BaseHTTPMiddleware):
+    """HTTP Basic auth gate for the whole app.
+
+    Active only when both APP_BASIC_AUTH_USER and APP_BASIC_AUTH_PASS are set
+    in the environment — the local-dev default (both empty) makes this a
+    no-op. Intended for cloud deployments (Hugging Face Spaces) where the
+    public URL would otherwise expose a paid OpenAI key via /process.
+    Credentials are compared with secrets.compare_digest to avoid leaking
+    timing information; failures return 401 with WWW-Authenticate so the
+    browser shows its native prompt.
+    """
+
+    def __init__(self, app, username: str, password: str) -> None:
+        super().__init__(app)
+        self._user = username
+        self._pass = password
+
+    async def dispatch(self, request: Request, call_next):
+        header = request.headers.get("authorization", "")
+        if header.startswith("Basic "):
+            try:
+                decoded = base64.b64decode(header[6:]).decode("utf-8", errors="replace")
+                user, _, pw = decoded.partition(":")
+                if secrets.compare_digest(user, self._user) and secrets.compare_digest(pw, self._pass):
+                    return await call_next(request)
+            except Exception:
+                pass
+        return Response(
+            status_code=401,
+            headers={"WWW-Authenticate": 'Basic realm="video-to-steps"'},
+        )
+
+
+_auth_user = (os.getenv("APP_BASIC_AUTH_USER") or "").strip()
+_auth_pass = os.getenv("APP_BASIC_AUTH_PASS") or ""
+if _auth_user and _auth_pass:
+    app.add_middleware(BasicAuthMiddleware, username=_auth_user, password=_auth_pass)
+
+
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 
