@@ -8,6 +8,7 @@ future incoming HTTP payloads.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -79,6 +80,8 @@ class Manifest:
     mode: str = ""                     # "cloud" | "local" | "hybrid" — informational
     config_snapshot: dict[str, Any] = field(default_factory=dict)
     cost: CostBreakdown = field(default_factory=CostBreakdown)
+    published_url: str | None = None   # set when the result page is live on GitHub Pages
+    published_at: datetime | None = None
 
 
 @dataclass(slots=True)

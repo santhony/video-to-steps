@@ -25,3 +25,31 @@ def test_publish_error_is_runtime_error():
     e = PublishError("git push failed")
     assert isinstance(e, RuntimeError)
     assert str(e) == "git push failed"
+
+
+def test_manifest_publish_fields_default_to_none():
+    """Existing manifests without these fields must continue to construct."""
+    from pipeline.types import Manifest
+
+    m = Manifest(job_id="abc", url="https://example.com")
+    assert m.published_url is None
+    assert m.published_at is None
+
+
+def test_manifest_publish_fields_round_trip(tmp_path):
+    """A manifest with a datetime survives write+read via the storage helpers."""
+    from datetime import datetime, timezone
+    from pipeline.storage import read_json, write_json_atomic
+    from pipeline.types import Manifest
+
+    m = Manifest(
+        job_id="abc",
+        url="https://example.com",
+        published_url="https://santhony.github.io/vts-publish/abc/",
+        published_at=datetime(2026, 5, 27, 12, 0, 0, tzinfo=timezone.utc),
+    )
+    p = tmp_path / "meta.json"
+    write_json_atomic(p, m)
+    loaded = read_json(p)
+    assert loaded["published_url"] == "https://santhony.github.io/vts-publish/abc/"
+    assert loaded["published_at"] == "2026-05-27T12:00:00+00:00"
