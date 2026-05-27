@@ -105,7 +105,8 @@ ffmpeg.
   future incoming HTTP payload validation.
 - **`@dataclass(slots=True)`**: every internal data type (`Cue`,
   `Frame`, `StepOutline`, `Step`, `TokenUsage`, `CostBreakdown`,
-  `Manifest`, `ChatResult`, `CaptionResult`, `EmbedResult`, `ModelPrice`).
+  `Manifest`, `ChatResult`, `CaptionResult`, `EmbedResult`, `ModelPrice`,
+  `StaticBundle`).
   `slots=True` is intentional — do not drop it; it catches typos.
 
 ### Atomic JSON writes
@@ -116,9 +117,12 @@ Anything written to `data/jobs/<id>/*.json` MUST go through
 dicts/lists — pass dataclasses directly, no manual `asdict`.
 
 ### Test markers
-`@pytest.mark.cloud` for tests that hit live providers. Default
-`addopts = -m 'not cloud' --strict-markers` keeps the offline suite
-fast; `RUN_CLOUD_TESTS=1 pytest -m cloud` runs them.
+`@pytest.mark.cloud` for tests that hit live providers; default
+`addopts = -m 'not cloud' --strict-markers` keeps the offline suite fast,
+and `RUN_CLOUD_TESTS=1 pytest -m cloud` runs them. `@pytest.mark.publish`
+is registered for tests that hit the real publish path (`gh` + `git` +
+network); the live smoke is invoked via `RUN_PUBLISH_SMOKE=1 python -m
+scripts.smoke_publish` rather than the marker filter.
 
 ## Provider Protocols (Contracts)
 
