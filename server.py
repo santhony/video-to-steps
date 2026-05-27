@@ -284,6 +284,7 @@ async def job_result(request: Request, job_id: str) -> HTMLResponse:
             "steps": [_AttrDict(s) for s in steps],
             "frame_captions": frame_captions,
             "step_links": step_links,
+            "publish_enabled": settings.publish_enabled,
         },
     )
 
