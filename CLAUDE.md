@@ -1,6 +1,6 @@
 # video-to-steps
 
-Last verified: 2026-05-20
+Last verified: 2026-05-27
 
 YouTube instructional video → ordered illustrated step-by-step guide. v1
 implementation lives on the `vts-v1` branch; design plan at
