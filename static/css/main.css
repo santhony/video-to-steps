@@ -26,3 +26,33 @@ button { padding: 0.6em 1.2em; font-size: 1rem; background: var(--accent); color
 .video-title    { margin: 0 0 0.2em 0; line-height: 1.25; }
 .job-id-line    { color: var(--muted); font-size: 0.85em; margin: 0 0 1em 0; }
 .job-id-line code { font-size: 0.9em; }
+
+/* Publish to GitHub Pages controls */
+.publish-controls {
+  margin: 1rem 0 1.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fafafa;
+}
+.publish-controls .published {
+  margin: 0 0 0.5rem;
+  word-break: break-all;
+}
+.publish-controls button {
+  font: inherit;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+}
+.publish-controls .htmx-indicator {
+  display: none;
+  margin-left: 0.75rem;
+  font-style: italic;
+  color: #666;
+}
+/* HTMX adds .htmx-request to the originating element while the request is in flight.
+   The indicator becomes visible only during that window. */
+.publish-controls .htmx-request .htmx-indicator,
+.publish-controls .htmx-indicator.htmx-request {
+  display: inline;
+}
