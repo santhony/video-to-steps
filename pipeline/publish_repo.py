@@ -77,7 +77,7 @@ class PublishRepo:
                 raise PublishError(f"copying bundle file {rel}: {e}") from e
 
             await self._git("add", f"{job_id}/")
-            await self._git("commit", "-m", f"publish {job_id}")
+            await self._git("commit", "--allow-empty", "-m", f"publish {job_id}")
             await self._git("push", "origin", self._branch)
 
             return f"{self._base_url}/{job_id}/"
@@ -92,7 +92,7 @@ class PublishRepo:
                 return  # already absent; manifest will still be cleared by caller
 
             await self._git("rm", "-r", f"{job_id}/")
-            await self._git("commit", "-m", f"unpublish {job_id}")
+            await self._git("commit", "--allow-empty", "-m", f"unpublish {job_id}")
             await self._git("push", "origin", self._branch)
 
     # ---- internals --------------------------------------------------
@@ -156,6 +156,12 @@ class PublishRepo:
         _, err = await proc.communicate()
         if proc.returncode != 0:
             raise PublishError(f"git clone failed: {err.decode(errors='replace')}")
+
+        # Smart-HTTP push can fail with HTTP 400 / "send-pack: unexpected
+        # disconnect" on bundles with many frames; bumping postBuffer
+        # avoids the proxy/buffer cutoff. 500 MB is the standard workaround
+        # value.
+        await self._git("config", "http.postBuffer", "524288000")
 
     async def _git(self, *args: str) -> None:
         """Run `git <args>` inside the clone dir. Raises PublishError on non-zero exit."""
