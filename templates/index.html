@@ -8,6 +8,11 @@
   <input type="text" id="url" name="url" required
          placeholder="youtube.com/watch?v=... or youtu.be/..." autofocus
          spellcheck="false" autocapitalize="off" autocorrect="off">
+  <label for="mode">Mode</label>
+  <select id="mode" name="mode">
+    <option value="local" {% if default_mode != "cloud" %}selected{% endif %}>Local</option>
+    <option value="cloud" {% if default_mode == "cloud" %}selected{% endif %}>Cloud</option>
+  </select>
   <button type="submit">Make steps</button>
 </form>
 <p class="hint">Paste the URL of a short instructional video. We download

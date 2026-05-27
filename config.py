@@ -84,7 +84,53 @@ class Settings(BaseSettings):
     )
     publish_enabled: bool = Field(default=False, alias="PUBLISH_ENABLED")
 
+    # Cloud-mode overlay (used when the user selects "cloud" on the index
+    # form). Any field left blank falls back to the corresponding
+    # unprefixed value — so a partial override is fine.
+    default_mode: str = Field(default="local", alias="DEFAULT_MODE")
+    cloud_embed_backend: str = Field(default="", alias="CLOUD_EMBED_BACKEND")
+    cloud_jina_api_key: str = Field(default="", alias="CLOUD_JINA_API_KEY")
+    cloud_llm_base_url: str = Field(default="", alias="CLOUD_LLM_BASE_URL")
+    cloud_llm_path_chat: str = Field(default="", alias="CLOUD_LLM_PATH_CHAT")
+    cloud_llm_api_key: str = Field(default="", alias="CLOUD_LLM_API_KEY")
+    cloud_llm_model: str = Field(default="", alias="CLOUD_LLM_MODEL")
+    cloud_vision_base_url: str = Field(default="", alias="CLOUD_VISION_BASE_URL")
+    cloud_vision_path_chat: str = Field(default="", alias="CLOUD_VISION_PATH_CHAT")
+    cloud_vision_api_key: str = Field(default="", alias="CLOUD_VISION_API_KEY")
+    cloud_vision_model: str = Field(default="", alias="CLOUD_VISION_MODEL")
+
 
 def get_settings() -> Settings:
     """Returns a fresh Settings instance. Callers may cache as needed."""
     return Settings()
+
+
+_CLOUD_OVERLAY_MAP = {
+    "embed_backend": "cloud_embed_backend",
+    "jina_api_key": "cloud_jina_api_key",
+    "llm_base_url": "cloud_llm_base_url",
+    "llm_path_chat": "cloud_llm_path_chat",
+    "llm_api_key": "cloud_llm_api_key",
+    "llm_model": "cloud_llm_model",
+    "vision_base_url": "cloud_vision_base_url",
+    "vision_path_chat": "cloud_vision_path_chat",
+    "vision_api_key": "cloud_vision_api_key",
+    "vision_model": "cloud_vision_model",
+}
+
+
+def settings_for_mode(settings: Settings, mode: str) -> Settings:
+    """Return a Settings overlay for the chosen mode.
+
+    `mode="local"` (or anything other than `"cloud"`) returns settings
+    unchanged. `mode="cloud"` overlays any non-empty `cloud_*` field
+    onto its unprefixed counterpart.
+    """
+    if mode != "cloud":
+        return settings
+    overlay: dict[str, str] = {}
+    for target, source in _CLOUD_OVERLAY_MAP.items():
+        value = getattr(settings, source)
+        if value:
+            overlay[target] = value
+    return settings.model_copy(update=overlay) if overlay else settings

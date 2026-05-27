@@ -33,7 +33,7 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from config import get_settings
+from config import get_settings, settings_for_mode
 from pipeline.pipeline import run_job
 from pipeline.storage import ensure_job_dir, read_json, write_json_atomic
 from pipeline.types import Manifest, Step, Frame, CostBreakdown, PublishError
@@ -258,13 +258,16 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="stat
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:
     # vts-v1.AC8.1
-    return templates.TemplateResponse(request, "index.html", {})
+    return templates.TemplateResponse(
+        request, "index.html", {"default_mode": get_settings().default_mode},
+    )
 
 
 @app.post("/process")
 async def process(
     background_tasks: BackgroundTasks,
     url: str = Form(...),
+    mode: str = Form(""),
 ) -> RedirectResponse:
     # Normalize first so "youtu.be/ABC..." and "  www.youtube.com/watch?v=…  "
     # pasted without a scheme reach the validator with `https://` prepended.
@@ -277,6 +280,10 @@ async def process(
         )
 
     settings = get_settings()
+    effective_mode = mode or settings.default_mode
+    if effective_mode not in ("local", "cloud"):
+        raise HTTPException(400, "mode must be 'local' or 'cloud'.")
+    settings = settings_for_mode(settings, effective_mode)
     jobs_root = Path(settings.jobs_root)
     # Extract the YouTube video id (we already know URL matches _YT_RE)
     # so the job id — and therefore the URL — surfaces it.
@@ -285,7 +292,9 @@ async def process(
     job_id = _new_job_id(video_id=video_id)
     ensure_job_dir(jobs_root, job_id)
 
-    initial = Manifest(job_id=job_id, url=url, status="queued", progress="queued")
+    initial = Manifest(
+        job_id=job_id, url=url, status="queued", progress="queued", mode=effective_mode,
+    )
     write_json_atomic(jobs_root / job_id / "meta.json", initial)
 
     # vts-v1.AC8.2 — spawn pipeline task.
