@@ -404,7 +404,7 @@ async def job_publish(request: Request, job_id: str) -> HTMLResponse:
     try:
         url = await repo.publish_job(job_id, bundle)
     except PublishError as e:
-        raise HTTPException(500, str(e))
+        raise HTTPException(500, str(e)) from e
 
     merged = _merge_manifest(
         jobs_root, job_id,
@@ -434,7 +434,7 @@ async def job_unpublish(request: Request, job_id: str) -> HTMLResponse:
     try:
         await repo.unpublish_job(job_id)
     except PublishError as e:
-        raise HTTPException(500, str(e))
+        raise HTTPException(500, str(e)) from e
 
     merged = _merge_manifest(jobs_root, job_id, published_url=None, published_at=None)
     return templates.TemplateResponse(

@@ -4,15 +4,12 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import AsyncMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 import server
-from pipeline.types import StaticBundle
+from pipeline.types import PublishError, StaticBundle
 
 
 @pytest.fixture
@@ -162,8 +159,6 @@ async def test_unpublish_route_clears_manifest(jobs_root, done_job, monkeypatch)
 @pytest.mark.asyncio
 async def test_publish_route_500_on_publish_error(jobs_root, done_job, monkeypatch):
     """If PublishRepo raises PublishError, the route returns 500 and does NOT update the manifest."""
-    from pipeline.types import PublishError
-
     monkeypatch.setenv("PUBLISH_ENABLED", "true")
 
     class FailingRepo(FakePublishRepo):
