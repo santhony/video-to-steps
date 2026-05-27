@@ -143,14 +143,19 @@ class PublishRepo:
         # remove it so gh repo clone succeeds.
         if self._clone_dir.exists() and not (self._clone_dir / ".git").exists():
             shutil.rmtree(self._clone_dir, ignore_errors=True)
+        # Force HTTPS clone so gh's HTTPS token credential helper handles
+        # auth — `gh repo clone <repo>` honors the user's git_protocol pref
+        # (often ssh), which can fail if no SSH key is registered on the
+        # newly-created repo.
+        clone_url = f"https://github.com/{self._repo}.git"
         proc = await asyncio.create_subprocess_exec(
-            "gh", "repo", "clone", self._repo, str(self._clone_dir),
+            "git", "clone", clone_url, str(self._clone_dir),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         _, err = await proc.communicate()
         if proc.returncode != 0:
-            raise PublishError(f"gh repo clone failed: {err.decode(errors='replace')}")
+            raise PublishError(f"git clone failed: {err.decode(errors='replace')}")
 
     async def _git(self, *args: str) -> None:
         """Run `git <args>` inside the clone dir. Raises PublishError on non-zero exit."""

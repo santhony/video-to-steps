@@ -76,7 +76,7 @@ async def test_ensure_ready_creates_repo_when_missing(settings, monkeypatch):
         # already-cloned branch.
         if args[:3] == ("gh", "repo", "view"):
             return _fail_proc(b"not found")
-        if args[:3] == ("gh", "repo", "clone"):
+        if args[:2] == ("git", "clone"):
             clone_target = Path(args[3])
             (clone_target / ".git").mkdir(parents=True, exist_ok=True)
         return _ok_proc()
@@ -91,7 +91,7 @@ async def test_ensure_ready_creates_repo_when_missing(settings, monkeypatch):
     assert any("gh repo view" in c for c in cmds)
     assert any("gh repo create" in c for c in cmds)
     assert any("gh api" in c and "pages" in c for c in cmds)
-    assert any("gh repo clone" in c for c in cmds)
+    assert any(c.startswith("git clone https://github.com/") for c in cmds)
 
 
 @pytest.mark.asyncio
