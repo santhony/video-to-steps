@@ -151,7 +151,7 @@ class PublishRepo:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        out, err = await proc.communicate()
+        _, err = await proc.communicate()
         if proc.returncode != 0:
             raise PublishError(
                 f"git {' '.join(args)} failed: {err.decode(errors='replace').strip()}"

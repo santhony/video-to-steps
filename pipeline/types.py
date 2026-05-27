@@ -69,7 +69,10 @@ class CostBreakdown:
 class Manifest:
     """Per-job record persisted to meta.json.
 
-    Only the orchestrator mutates this; the server reads from disk.
+    Mutated by the orchestrator (`pipeline.pipeline._update`) and by the
+    server in two narrow carve-outs: the initial `queued` write in
+    `/process`, and the publish-state updates in `/job/{id}/publish`
+    and `/job/{id}/unpublish`. All writes go through `write_json_atomic`.
     """
     job_id: str
     url: str
@@ -97,8 +100,4 @@ class StaticBundle:
 
 
 class PublishError(RuntimeError):
-    """Raised when a publish or unpublish operation fails.
-
-    Carries the underlying stderr / message so server routes can render
-    a useful error fragment.
-    """
+    """Raised when a publish or unpublish operation fails."""
