@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import asdict, is_dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +33,7 @@ def ensure_job_dir(jobs_root: Path, job_id: str) -> Path:
 
 
 def _to_jsonable(value: Any) -> Any:
-    """Recursively convert dataclasses, Paths, and sets to JSON-safe shapes."""
+    """Recursively convert dataclasses, Paths, sets, and datetimes to JSON-safe shapes."""
     if is_dataclass(value) and not isinstance(value, type):
         return _to_jsonable(asdict(value))
     if isinstance(value, Path):
@@ -43,6 +44,8 @@ def _to_jsonable(value: Any) -> Any:
         return [_to_jsonable(v) for v in value]
     if isinstance(value, set):
         return [_to_jsonable(v) for v in sorted(value, key=str)]
+    if isinstance(value, datetime):
+        return value.isoformat()
     return value
 
 
