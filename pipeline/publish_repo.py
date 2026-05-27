@@ -108,10 +108,9 @@ class PublishRepo:
             return  # exists
 
         # Create it. --add-readme so the first push has a parent commit on the branch.
-        # --default-branch sets the initial branch to match PUBLISH_BRANCH.
+        # gh derives the default branch from `git config init.defaultBranch`.
         create = await asyncio.create_subprocess_exec(
             "gh", "repo", "create", self._repo, "--public", "--add-readme",
-            "--default-branch", self._branch,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
