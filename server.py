@@ -147,6 +147,10 @@ def _manifest_from_dict(m: dict) -> Manifest:
         embed_usd=cost_d.get("embed_usd", 0.0),
         total_usd=cost_d.get("total_usd", 0.0),
     )
+    published_at = None
+    published_at_str = m.get("published_at")
+    if published_at_str:
+        published_at = datetime.fromisoformat(published_at_str)
     return Manifest(
         job_id=m["job_id"],
         url=m["url"],
@@ -157,7 +161,8 @@ def _manifest_from_dict(m: dict) -> Manifest:
         mode=m.get("mode", ""),
         config_snapshot=m.get("config_snapshot") or {},
         cost=cost,
-        # published_* are not needed for rendering the snapshot
+        published_url=m.get("published_url"),
+        published_at=published_at,
     )
 
 

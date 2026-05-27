@@ -229,3 +229,28 @@ async def test_unpublish_job_noop_when_dir_absent(settings, monkeypatch):
 
     cmds = [" ".join(c) for c in calls if c]
     assert not any(c.startswith("git") and "rm" in c for c in cmds)
+
+
+@pytest.mark.asyncio
+async def test_publish_job_raises_publish_error_on_missing_bundle_file(settings, bundle, monkeypatch, tmp_path):
+    """If a bundle file_map points to a nonexistent src path, PublishError is raised."""
+    pr = build_publish_repo(settings)
+    settings.publish_clone_dir.mkdir(parents=True, exist_ok=True)
+    (settings.publish_clone_dir / ".git").mkdir()
+
+    # Create one file but leave another missing
+    src_css = tmp_path / "main.css"
+    src_css.write_text("/* css */")
+    bundle.file_map["main.css"] = src_css
+    bundle.file_map["frames/0001.jpg"] = Path("/nonexistent/file/path.jpg")
+
+    async def fake_exec(*args, **kwargs):
+        return _ok_proc()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_exec)
+    pr.ensure_ready = AsyncMock()
+
+    with pytest.raises(PublishError) as exc:
+        await pr.publish_job("dQw4w9WgXcQ_a1b2c3", bundle)
+    assert "copying bundle file" in str(exc.value)
+    assert "frames/0001.jpg" in str(exc.value)

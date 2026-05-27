@@ -175,3 +175,38 @@ async def test_publish_route_500_on_publish_error(jobs_root, done_job, monkeypat
     meta = json.loads((jobs_root / done_job / "meta.json").read_text())
     assert meta["published_url"] is None
     assert meta["published_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_unpublish_route_clears_manifest_for_older_job_without_publish_keys(jobs_root, monkeypatch):
+    """Unpublishing a job with an older manifest (no published_* keys) should return 200 with cleared fields."""
+    monkeypatch.setenv("PUBLISH_ENABLED", "true")
+    job_id = "dQw4w9WgXcQ_a1b2c3"
+    (jobs_root / job_id).mkdir()
+    (jobs_root / job_id / "frames").mkdir()
+    # Older manifest WITHOUT published_* keys
+    meta = {
+        "job_id": job_id,
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "title": "Test",
+        "status": "done",
+        "progress": "",
+        "error": "",
+        "mode": "cloud",
+        "config_snapshot": {"embed_backend": "jina_v4", "llm_model": "x", "vision_model": "y"},
+        "cost": {"chat_usd": 0.0, "vision_usd": 0.0, "embed_usd": 0.0, "total_usd": 0.0},
+    }
+    (jobs_root / job_id / "meta.json").write_text(json.dumps(meta))
+
+    fake = FakePublishRepo()
+    monkeypatch.setattr(server, "build_publish_repo", lambda settings: fake)
+
+    async with await _client() as c:
+        r = await c.post(f"/job/{job_id}/unpublish")
+
+    assert r.status_code == 200
+    assert fake.unpublished == [job_id]
+    assert "Publish to GitHub Pages" in r.text
+    meta_after = json.loads((jobs_root / job_id / "meta.json").read_text())
+    assert meta_after.get("published_url") is None
+    assert meta_after.get("published_at") is None

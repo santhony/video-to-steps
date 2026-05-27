@@ -68,10 +68,13 @@ class PublishRepo:
             job_dir.mkdir(parents=True)
 
             (job_dir / "index.html").write_text(bundle.html, encoding="utf-8")
-            for rel, src in bundle.file_map.items():
-                dest = job_dir / rel
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy(src, dest)
+            try:
+                for rel, src in bundle.file_map.items():
+                    dest = job_dir / rel
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy(src, dest)
+            except (OSError, FileNotFoundError) as e:
+                raise PublishError(f"copying bundle file {rel}: {e}") from e
 
             await self._git("add", f"{job_id}/")
             await self._git("commit", "-m", f"publish {job_id}")
@@ -105,8 +108,10 @@ class PublishRepo:
             return  # exists
 
         # Create it. --add-readme so the first push has a parent commit on the branch.
+        # --default-branch sets the initial branch to match PUBLISH_BRANCH.
         create = await asyncio.create_subprocess_exec(
             "gh", "repo", "create", self._repo, "--public", "--add-readme",
+            "--default-branch", self._branch,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -135,6 +140,10 @@ class PublishRepo:
 
     async def _clone(self) -> None:
         self._clone_dir.parent.mkdir(parents=True, exist_ok=True)
+        # If the clone dir exists but lacks .git (interrupted prior clone),
+        # remove it so gh repo clone succeeds.
+        if self._clone_dir.exists() and not (self._clone_dir / ".git").exists():
+            shutil.rmtree(self._clone_dir, ignore_errors=True)
         proc = await asyncio.create_subprocess_exec(
             "gh", "repo", "clone", self._repo, str(self._clone_dir),
             stdout=asyncio.subprocess.PIPE,
