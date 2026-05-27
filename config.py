@@ -72,6 +72,18 @@ class Settings(BaseSettings):
     whisper_fallback: bool = Field(default=False, alias="WHISPER_FALLBACK")
     whisper_model: str = Field(default="base.en", alias="WHISPER_MODEL")
 
+    # Publish to GitHub Pages
+    publish_repo: str = Field(default="santhony/vts-publish", alias="PUBLISH_REPO")
+    publish_branch: str = Field(default="main", alias="PUBLISH_BRANCH")
+    publish_base_url: str = Field(
+        default="https://santhony.github.io/vts-publish",
+        alias="PUBLISH_BASE_URL",
+    )
+    publish_clone_dir: Path = Field(
+        default=Path("data/publish_repo"), alias="PUBLISH_CLONE_DIR"
+    )
+    publish_enabled: bool = Field(default=False, alias="PUBLISH_ENABLED")
+
 
 def get_settings() -> Settings:
     """Returns a fresh Settings instance. Callers may cache as needed."""
