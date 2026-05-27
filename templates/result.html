@@ -16,6 +16,10 @@
   </small>
 </section>
 
+{% if not static_mode and publish_enabled %}
+{% include "_publish_controls_fragment.html" %}
+{% endif %}
+
 <ol class="steps">
 {% for step in steps %}
   <li>

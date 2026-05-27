@@ -1,0 +1,25 @@
+<div id="publish-controls" class="publish-controls">
+  {% if manifest.published_url %}
+    <p class="published">
+      Published at
+      <a href="{{ manifest.published_url }}" target="_blank" rel="noopener noreferrer">{{ manifest.published_url }}</a>
+    </p>
+    <button type="button"
+            hx-post="/job/{{ manifest.job_id }}/unpublish"
+            hx-target="#publish-controls"
+            hx-swap="outerHTML"
+            hx-indicator="#publish-spinner">
+      Unpublish
+    </button>
+    <span id="publish-spinner" class="htmx-indicator">…</span>
+  {% else %}
+    <button type="button"
+            hx-post="/job/{{ manifest.job_id }}/publish"
+            hx-target="#publish-controls"
+            hx-swap="outerHTML"
+            hx-indicator="#publish-spinner">
+      Publish to GitHub Pages
+    </button>
+    <span id="publish-spinner" class="htmx-indicator">publishing…</span>
+  {% endif %}
+</div>
