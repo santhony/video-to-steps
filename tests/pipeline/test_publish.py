@@ -147,3 +147,89 @@ class TestStaticModeTemplate:
             step_links=[None, None],
         )
         assert '/job/dQw4w9WgXcQ_a1b2c3/frame/0001.jpg' in html
+
+
+class TestBuildStaticBundle:
+    """build_static_bundle composes render + file_map deterministically."""
+
+    def test_bundle_html_uses_static_mode(self, jinja_env, manifest, steps):
+        from pipeline.publish import build_static_bundle
+
+        bundle = build_static_bundle(
+            manifest=manifest,
+            steps=steps,
+            frame_captions={},
+            step_links=[None, None],
+            frames_dir=Path("/tmp/job/frames"),
+            css_path=CSS_PATH,
+            templates_env=jinja_env,
+        )
+        assert 'href="main.css"' in bundle.html
+        assert '/job/' not in bundle.html
+        assert 'htmx.min.js' not in bundle.html
+
+    def test_file_map_contains_main_css(self, jinja_env, manifest, steps):
+        from pipeline.publish import build_static_bundle
+
+        bundle = build_static_bundle(
+            manifest=manifest,
+            steps=steps,
+            frame_captions={},
+            step_links=[None, None],
+            frames_dir=Path("/tmp/job/frames"),
+            css_path=CSS_PATH,
+            templates_env=jinja_env,
+        )
+        assert bundle.file_map["main.css"] == CSS_PATH
+
+    def test_file_map_contains_union_of_frames_deduped(self, jinja_env, manifest, steps):
+        from pipeline.publish import build_static_bundle
+
+        bundle = build_static_bundle(
+            manifest=manifest,
+            steps=steps,
+            frame_captions={},
+            step_links=[None, None],
+            frames_dir=Path("/tmp/job/frames"),
+            css_path=CSS_PATH,
+            templates_env=jinja_env,
+        )
+        # steps reference frame indices {0, 4, 9} → filenames 0001, 0005, 0010
+        frame_keys = sorted(k for k in bundle.file_map if k.startswith("frames/"))
+        assert frame_keys == ["frames/0001.jpg", "frames/0005.jpg", "frames/0010.jpg"]
+        assert bundle.file_map["frames/0001.jpg"] == Path("/tmp/job/frames/0001.jpg")
+        assert bundle.file_map["frames/0005.jpg"] == Path("/tmp/job/frames/0005.jpg")
+        assert bundle.file_map["frames/0010.jpg"] == Path("/tmp/job/frames/0010.jpg")
+
+    def test_file_map_excludes_unreferenced_frames(self, jinja_env, manifest, steps):
+        """A frame on disk that no step references must not be in the bundle."""
+        from pipeline.publish import build_static_bundle
+
+        bundle = build_static_bundle(
+            manifest=manifest,
+            steps=steps,
+            frame_captions={},
+            step_links=[None, None],
+            frames_dir=Path("/tmp/job/frames"),
+            css_path=CSS_PATH,
+            templates_env=jinja_env,
+        )
+        # Only 3 frame entries (plus main.css = 4 total)
+        assert sum(1 for k in bundle.file_map if k.startswith("frames/")) == 3
+
+    def test_no_absolute_urls_in_html(self, jinja_env, manifest, steps):
+        """The published page must be self-contained — no live-server URLs."""
+        from pipeline.publish import build_static_bundle
+
+        bundle = build_static_bundle(
+            manifest=manifest,
+            steps=steps,
+            frame_captions={},
+            step_links=[None, None],
+            frames_dir=Path("/tmp/job/frames"),
+            css_path=CSS_PATH,
+            templates_env=jinja_env,
+        )
+        # No internal absolute paths leak
+        assert '/static/' not in bundle.html
+        assert '/job/' not in bundle.html
