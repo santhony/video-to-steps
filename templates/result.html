@@ -16,6 +16,10 @@
   </small>
 </section>
 
+{% if not static_mode and publish_enabled %}
+{% include "_publish_controls_fragment.html" %}
+{% endif %}
+
 <ol class="steps">
 {% for step in steps %}
   <li>
@@ -29,11 +33,19 @@
     {% endif %}
     <div class="frame-grid">
       {% for frame in step.frames %}
+        {% if static_mode %}
+        <a href="frames/{{ '%04d' % (frame.index + 1) }}.jpg">
+          <img src="frames/{{ '%04d' % (frame.index + 1) }}.jpg"
+               alt="{{ frame_captions.get(frame.index|string, '') or step.instruction }}"
+               loading="lazy">
+        </a>
+        {% else %}
         <a href="/job/{{ manifest.job_id }}/frame/{{ '%04d' % (frame.index + 1) }}.jpg">
           <img src="/job/{{ manifest.job_id }}/frame/{{ '%04d' % (frame.index + 1) }}.jpg"
                alt="{{ frame_captions.get(frame.index|string, '') or step.instruction }}"
                loading="lazy">
         </a>
+        {% endif %}
       {% endfor %}
     </div>
   </li>

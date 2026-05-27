@@ -20,6 +20,8 @@ import os
 import re
 import uuid
 from pathlib import Path
+from datetime import datetime, timezone
+from typing import Any
 
 import base64
 import secrets
@@ -28,16 +30,26 @@ from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from jinja2 import Environment, FileSystemLoader
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from config import get_settings
 from pipeline.pipeline import run_job
 from pipeline.storage import ensure_job_dir, read_json, write_json_atomic
-from pipeline.types import Manifest
+from pipeline.types import Manifest, Step, Frame, CostBreakdown, PublishError
+from pipeline.publish import build_static_bundle
+from pipeline.publish_repo import build_publish_repo
 
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+# Jinja2 Environment used by pipeline.publish for static bundles.
+# Lives alongside the FastAPI Jinja2Templates wrapper so they share a loader root.
+_publish_env = Environment(
+    loader=FileSystemLoader(str(BASE_DIR / "templates")),
+    autoescape=True,
+)
 
 
 _YT_RE = re.compile(
@@ -120,6 +132,63 @@ def _load_manifest_dict(jobs_root: Path, job_id: str) -> dict | None:
     if not p.exists():
         return None
     return read_json(p)
+
+
+def _manifest_from_dict(m: dict) -> Manifest:
+    """Rebuild a Manifest dataclass from an on-disk meta.json dict.
+
+    Drops unknown keys defensively — older job files predating
+    `published_*` already work without these fields.
+    """
+    cost_d = m.get("cost") or {}
+    cost = CostBreakdown(
+        chat_usd=cost_d.get("chat_usd", 0.0),
+        vision_usd=cost_d.get("vision_usd", 0.0),
+        embed_usd=cost_d.get("embed_usd", 0.0),
+        total_usd=cost_d.get("total_usd", 0.0),
+    )
+    published_at = None
+    published_at_str = m.get("published_at")
+    if published_at_str:
+        published_at = datetime.fromisoformat(published_at_str)
+    return Manifest(
+        job_id=m["job_id"],
+        url=m["url"],
+        title=m.get("title", ""),
+        status=m.get("status", ""),
+        progress=m.get("progress", ""),
+        error=m.get("error", ""),
+        mode=m.get("mode", ""),
+        config_snapshot=m.get("config_snapshot") or {},
+        cost=cost,
+        published_url=m.get("published_url"),
+        published_at=published_at,
+    )
+
+
+def _step_from_dict(s: dict) -> Step:
+    """Rebuild a Step (and its Frames) from an on-disk steps.json entry."""
+    frames = [
+        Frame(index=f["index"], timestamp=f["timestamp"], path=Path(f["path"]))
+        for f in s.get("frames") or []
+    ]
+    return Step(
+        index=s["index"],
+        start=s["start"],
+        end=s["end"],
+        instruction=s["instruction"],
+        frames=frames,
+    )
+
+
+def _merge_manifest(jobs_root: Path, job_id: str, **updates: Any) -> dict:
+    """Load the manifest dict, apply `updates`, write atomically. Returns the merged dict."""
+    m = _load_manifest_dict(jobs_root, job_id)
+    if m is None:
+        raise HTTPException(404, "Unknown job id.")
+    m.update(updates)
+    write_json_atomic(jobs_root / job_id / "meta.json", m)
+    return m
 
 
 class _AttrDict(dict):
@@ -284,6 +353,7 @@ async def job_result(request: Request, job_id: str) -> HTMLResponse:
             "steps": [_AttrDict(s) for s in steps],
             "frame_captions": frame_captions,
             "step_links": step_links,
+            "publish_enabled": settings.publish_enabled,
         },
     )
 
@@ -299,6 +369,84 @@ async def job_frame(job_id: str, name: str) -> FileResponse:
     if not p.exists():
         raise HTTPException(404, "Frame not found.")
     return FileResponse(p, media_type="image/jpeg")
+
+
+@app.post("/job/{job_id}/publish", response_class=HTMLResponse)
+async def job_publish(request: Request, job_id: str) -> HTMLResponse:
+    _guard_job_id(job_id)
+    settings = get_settings()
+    if not settings.publish_enabled:
+        raise HTTPException(400, "Publishing is disabled (PUBLISH_ENABLED=false).")
+
+    jobs_root = Path(settings.jobs_root)
+    m = _load_manifest_dict(jobs_root, job_id)
+    if m is None:
+        raise HTTPException(404, "Unknown job id.")
+    if m.get("status") != "done":
+        raise HTTPException(400, "Only completed jobs can be published.")
+
+    # Reconstruct the data the snapshot needs (same shape as job_result).
+    steps_raw = read_json(jobs_root / job_id / "steps.json")
+    captions_path = jobs_root / job_id / "frame_captions.json"
+    frame_captions = read_json(captions_path) if captions_path.exists() else {}
+    step_links = [_video_deep_link(m.get("url", ""), s.get("start", 0)) for s in steps_raw]
+
+    # Rebuild dataclasses from on-disk dicts for the pure bundler.
+    manifest = _manifest_from_dict(m)
+    steps = [_step_from_dict(s) for s in steps_raw]
+
+    bundle = build_static_bundle(
+        manifest=manifest,
+        steps=steps,
+        frame_captions=frame_captions,
+        step_links=step_links,
+        frames_dir=jobs_root / job_id / "frames",
+        css_path=BASE_DIR / "static" / "css" / "main.css",
+        templates_env=_publish_env,
+    )
+
+    repo = build_publish_repo(settings)
+    try:
+        url = await repo.publish_job(job_id, bundle)
+    except PublishError as e:
+        raise HTTPException(500, str(e)) from e
+
+    merged = _merge_manifest(
+        jobs_root, job_id,
+        published_url=url,
+        published_at=datetime.now(timezone.utc).isoformat(),
+    )
+    return templates.TemplateResponse(
+        request,
+        "_publish_controls_fragment.html",
+        {"manifest": _AttrDict(merged)},
+    )
+
+
+@app.post("/job/{job_id}/unpublish", response_class=HTMLResponse)
+async def job_unpublish(request: Request, job_id: str) -> HTMLResponse:
+    _guard_job_id(job_id)
+    settings = get_settings()
+    if not settings.publish_enabled:
+        raise HTTPException(400, "Publishing is disabled (PUBLISH_ENABLED=false).")
+
+    jobs_root = Path(settings.jobs_root)
+    m = _load_manifest_dict(jobs_root, job_id)
+    if m is None:
+        raise HTTPException(404, "Unknown job id.")
+
+    repo = build_publish_repo(settings)
+    try:
+        await repo.unpublish_job(job_id)
+    except PublishError as e:
+        raise HTTPException(500, str(e)) from e
+
+    merged = _merge_manifest(jobs_root, job_id, published_url=None, published_at=None)
+    return templates.TemplateResponse(
+        request,
+        "_publish_controls_fragment.html",
+        {"manifest": _AttrDict(merged)},
+    )
 
 
 if __name__ == "__main__":

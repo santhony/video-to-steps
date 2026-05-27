@@ -1,6 +1,6 @@
 # video-to-steps
 
-Last verified: 2026-05-20
+Last verified: 2026-05-27
 
 YouTube instructional video → ordered illustrated step-by-step guide. v1
 implementation lives on the `vts-v1` branch; design plan at
@@ -51,6 +51,12 @@ Whisper transcription fallback (no longer a v2 stub).
 - `pipeline/` — all video→steps stages. Pure logic in `captions.py`,
   `match.py`, parsing helpers; orchestration in `pipeline.py`. Audio
   extraction for the Whisper fallback lives in `audio.py`.
+  Static-bundle publishing splits along the same FCIS line: pure
+  rendering + file-map composition in `publish.py`; the local-clone
+  state, `gh`/`git` subprocesses, and asyncio serialization in
+  `publish_repo.py`. The factory `build_publish_repo(settings)` is the
+  only sanctioned construction site, mirroring `build_llm` /
+  `build_embedder` / `build_whisper`.
 - `prompts/` — markdown templates: `outline.md`, `refine.md`,
   `vision_caption.md`. The first two split on a `## User` heading via
   `pipeline._prompts.load_system_user`. Per-prompt responsibilities:
@@ -72,6 +78,9 @@ Whisper transcription fallback (no longer a v2 stub).
       actions, tools, and materials.
 - `server.py` — FastAPI app (form, process, job page, status fragment,
   result page, frame).
+  Adds POST `/job/{id}/publish` and `/job/{id}/unpublish` when
+  `PUBLISH_ENABLED=1`; both swap the `_publish_controls_fragment.html`
+  partial via HTMX.
 - `templates/`, `static/` — Jinja2 templates + vendored htmx/css.
 - `scripts/` — one-call smoke diagnostics, not part of runtime.
 - `tests/` — mirrors `pipeline/` and `providers/` layout.
@@ -96,7 +105,8 @@ ffmpeg.
   future incoming HTTP payload validation.
 - **`@dataclass(slots=True)`**: every internal data type (`Cue`,
   `Frame`, `StepOutline`, `Step`, `TokenUsage`, `CostBreakdown`,
-  `Manifest`, `ChatResult`, `CaptionResult`, `EmbedResult`, `ModelPrice`).
+  `Manifest`, `ChatResult`, `CaptionResult`, `EmbedResult`, `ModelPrice`,
+  `StaticBundle`).
   `slots=True` is intentional — do not drop it; it catches typos.
 
 ### Atomic JSON writes
@@ -107,9 +117,12 @@ Anything written to `data/jobs/<id>/*.json` MUST go through
 dicts/lists — pass dataclasses directly, no manual `asdict`.
 
 ### Test markers
-`@pytest.mark.cloud` for tests that hit live providers. Default
-`addopts = -m 'not cloud' --strict-markers` keeps the offline suite
-fast; `RUN_CLOUD_TESTS=1 pytest -m cloud` runs them.
+`@pytest.mark.cloud` for tests that hit live providers; default
+`addopts = -m 'not cloud' --strict-markers` keeps the offline suite fast,
+and `RUN_CLOUD_TESTS=1 pytest -m cloud` runs them. `@pytest.mark.publish`
+is registered for tests that hit the real publish path (`gh` + `git` +
+network); the live smoke is invoked via `RUN_PUBLISH_SMOKE=1 python -m
+scripts.smoke_publish` rather than the marker filter.
 
 ## Provider Protocols (Contracts)
 
@@ -241,6 +254,18 @@ by `llm_outline`, `llm_refine`, and `caption_winners` (NOT
   that opens the source YouTube URL at the step's `start` time in a
   new tab (`target=_blank rel=noopener noreferrer`).
 - `GET /job/{id}/frame/{name}.jpg` → serve `data/jobs/<id>/frames/{name}.jpg`.
+- `POST /job/{id}/publish` → render a static bundle of the result page
+  (via `pipeline.publish.build_static_bundle`), push it to the
+  configured `PUBLISH_REPO` under `/<job_id>/` (via
+  `pipeline.publish_repo.publish_job`), update the manifest's
+  `published_url`/`published_at`, and return the
+  `_publish_controls_fragment.html` fragment for HTMX swap. Only
+  active when `PUBLISH_ENABLED=true`; 400 otherwise. 400 if status
+  != `done`. 500 on `PublishError` (manifest is NOT updated).
+- `POST /job/{id}/unpublish` → delete `<job_id>/` from the publish
+  repo, clear the manifest's publish fields, return the fragment.
+  No-op (still clears manifest, still returns fragment) if the job
+  was never published.
 
 Every route validates `job_id` via `_JOB_ID_RE`. Two accepted shapes:
 `<11-char video id>_<6 hex>` (current, e.g. `dQw4w9WgXcQ_a1b2c3` — so
@@ -274,6 +299,24 @@ Whisper-fallback settings:
 - `WHISPER_MODEL` (`whisper_model: str`, default `"base.en"`) — passed
   to `faster_whisper.WhisperModel`. Bigger models (`small.en`,
   `medium.en`) give better accuracy at higher CPU/RAM cost.
+
+Publish-to-GitHub-Pages settings:
+- `PUBLISH_ENABLED` (`publish_enabled: bool`, default `False`) — when
+  `False`, the result page does not render the publish controls and
+  the publish/unpublish routes 400. Operator opts in explicitly in
+  `.env`.
+- `PUBLISH_REPO` (`publish_repo: str`, default `santhony/vts-publish`) —
+  `owner/name` of the shared GitHub repo that hosts every published
+  job under `/<job_id>/`. First publish auto-creates this repo (public)
+  if it doesn't exist; subsequent publishes reuse it.
+- `PUBLISH_BRANCH` (`publish_branch: str`, default `main`) — the branch
+  GitHub Pages is configured to serve.
+- `PUBLISH_BASE_URL` (`publish_base_url: str`, default
+  `https://santhony.github.io/vts-publish`) — the public URL prefix.
+  Per-job URL is `<base>/<job_id>/`.
+- `PUBLISH_CLONE_DIR` (`publish_clone_dir: Path`, default
+  `data/publish_repo`) — local checkout reused across publishes to
+  avoid the per-publish `git clone` cost.
 
 ## Job Directory Layout
 
@@ -318,9 +361,12 @@ store. Manifest is the only source of truth for status.
 - Internal data types use `@dataclass(slots=True)` — do not remove
   `slots`; do not introduce Pydantic for internal types.
 - All `data/jobs/<id>/*.json` writes go through `write_json_atomic`.
-- Manifest writes only happen inside `pipeline.pipeline._update` (in
-  the orchestrator) or directly in `server.py` for the initial
-  `queued` state. Two writers, same atomic helper.
+- Manifest writes happen in exactly three sanctioned sites: (1)
+  `pipeline.pipeline._update` (the orchestrator), (2) the initial
+  `queued` write in `server.py:POST /process`, and (3) the publish-
+  state merges in `server.py:POST /job/{id}/publish` and
+  `/job/{id}/unpublish`. All three use `write_json_atomic`. Do not
+  add a fourth writer without revisiting this invariant.
 - Job IDs match `_JOB_ID_RE` in `server.py` — either `<11-char vid>_<6 hex>`
   (current) or `<12 hex>` (legacy). Frame filenames are 4-digit zero-pad.
 - `pipeline._prompts.load_system_user` requires exactly one `## User`
@@ -367,6 +413,26 @@ store. Manifest is the only source of truth for status.
   `docs/implementation-plans/2026-05-18-vts-v1/rehearsal-notes.md`
   lists fresh-host steps that a CI-like agent cannot verify
   (`setup.sh` / `start.sh` / Docker build / real YouTube run).
+- **Publish requires `gh` + GitHub Pages**: the publish route shells
+  out to `gh` and `git`; `gh auth login` (with `repo` scope) must be
+  run on the host. First publish auto-creates `PUBLISH_REPO` and
+  enables Pages via `gh api repos/<repo>/pages`. If your `gh` user
+  lacks permission to create or push to the configured repo, the
+  route 500s with the underlying `gh`/`git` stderr.
+- **Public repo by design**: the default `vts-publish` is **public**,
+  and job_ids leak the source YouTube id (`<video_id>_<6 hex>`).
+  Operators handling private content should change `PUBLISH_REPO` to
+  a private repo (note: GitHub Pages on private repos requires a paid
+  plan).
+- **Unpublish doesn't truly delete**: `git rm` + push leaves the
+  removed files in commit history. The `<job_id>/` URL goes 404, but
+  someone who knows the commit SHA can still recover the bundle.
+  Truly removing requires `git filter-repo` + force-push (out of scope).
+- **Single-process publish lock**: `PublishRepo` uses an
+  `asyncio.Lock` to serialize publishes within one process; the
+  single-process FastAPI deployment assumption already noted in this
+  file applies here too. A multi-worker deployment would need an
+  inter-process filesystem lock.
 
 ## Boundaries
 - Safe to edit: `pipeline/`, `providers/`, `server.py`, `templates/`,

@@ -8,6 +8,7 @@ future incoming HTTP payloads.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -68,7 +69,10 @@ class CostBreakdown:
 class Manifest:
     """Per-job record persisted to meta.json.
 
-    Only the orchestrator mutates this; the server reads from disk.
+    Mutated by the orchestrator (`pipeline.pipeline._update`) and by the
+    server in two narrow carve-outs: the initial `queued` write in
+    `/process`, and the publish-state updates in `/job/{id}/publish`
+    and `/job/{id}/unpublish`. All writes go through `write_json_atomic`.
     """
     job_id: str
     url: str
@@ -79,3 +83,21 @@ class Manifest:
     mode: str = ""                     # "cloud" | "local" | "hybrid" — informational
     config_snapshot: dict[str, Any] = field(default_factory=dict)
     cost: CostBreakdown = field(default_factory=CostBreakdown)
+    published_url: str | None = None   # set when the result page is live on GitHub Pages
+    published_at: datetime | None = None
+
+
+@dataclass(slots=True)
+class StaticBundle:
+    """A self-contained snapshot of a job's result page.
+
+    `html` is the full text of `index.html`; `file_map` maps each
+    bundle-relative path (e.g. `"frames/0001.jpg"`, `"main.css"`) to the
+    source file on disk that the publisher should copy into the bundle.
+    """
+    html: str
+    file_map: dict[str, Path] = field(default_factory=dict)
+
+
+class PublishError(RuntimeError):
+    """Raised when a publish or unpublish operation fails."""

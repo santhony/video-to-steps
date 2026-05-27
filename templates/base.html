@@ -4,11 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}video-to-steps{% endblock %}</title>
+  {% if static_mode %}
+  <link rel="stylesheet" href="main.css">
+  {% else %}
   <link rel="stylesheet" href="/static/css/main.css">
   <script src="/static/js/htmx.min.js" defer></script>
+  {% endif %}
 </head>
 <body>
-  <header><a href="/" class="brand">video-to-steps</a></header>
+  <header>
+    {% if static_mode %}
+    <span class="brand">video-to-steps</span>
+    {% else %}
+    <a href="/" class="brand">video-to-steps</a>
+    {% endif %}
+  </header>
   <main>{% block main %}{% endblock %}</main>
 </body>
 </html>
