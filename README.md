@@ -114,6 +114,75 @@ To stop:
 ./stop.sh
 ```
 
+## Publish to GitHub Pages
+
+video-to-steps can snapshot a completed job's result page and push it
+to a shared GitHub repository served via GitHub Pages, so the
+step-by-step guide is shareable as a public URL.
+
+### Prerequisites
+
+- `gh` CLI installed and authenticated on the host that runs the
+  server: `gh auth login` (select GitHub.com → HTTPS → authenticate
+  with browser). The auth must include `repo` scope.
+- `git` configured (`git config --global user.name "…" && git config
+  --global user.email "…@…"`) so commits don't fail.
+- Network access to github.com.
+
+### Enable it
+
+Set `PUBLISH_ENABLED=1` in `.env` (or your deployment env). Restart
+the server. The result page (`/job/<id>/result`) now shows a "Publish
+to GitHub Pages" button when the job is `done`.
+
+### What happens on first publish
+
+1. If `PUBLISH_REPO` (default `santhony/vts-publish`) doesn't exist
+   under your authenticated `gh` user, it is created as a **public**
+   repo.
+2. GitHub Pages is enabled on `PUBLISH_BRANCH` (default `main`).
+3. The result page is rendered as a self-contained HTML bundle
+   (winner frames + a copy of `main.css`, paths rewritten to be
+   relative) and pushed under `/<job_id>/`.
+4. The button swaps to show the public URL and an "Unpublish" button.
+5. Pages typically serves the new URL within ~30 seconds.
+
+### Unpublishing
+
+Click "Unpublish" on the result page. The `<job_id>/` directory is
+removed and pushed; the URL goes 404 within ~30 seconds. **Note**:
+`git rm` does not rewrite history — the bundle remains recoverable
+from past commits. To remove a publish irrecoverably, do that
+manually with `git filter-repo` + force-push.
+
+### Configuration
+
+| Env var | Default | Meaning |
+|---|---|---|
+| `PUBLISH_ENABLED` | `false` | Master switch for the feature. |
+| `PUBLISH_REPO` | `santhony/vts-publish` | `owner/name` of the shared publish repo. |
+| `PUBLISH_BRANCH` | `main` | Branch Pages serves from. |
+| `PUBLISH_BASE_URL` | `https://santhony.github.io/vts-publish` | Public URL prefix. |
+| `PUBLISH_CLONE_DIR` | `data/publish_repo` | Local clone reused across publishes. |
+
+### Verifying the path end-to-end
+
+```bash
+RUN_PUBLISH_SMOKE=1 python -m scripts.smoke_publish
+```
+
+Bundles a synthetic single-step job, pushes it, prints the URL, and
+unpublishes when you press Enter. Useful as a one-shot operator check
+of `gh` auth + Pages config.
+
+### Privacy
+
+The default repo is **public** and job_ids embed the source YouTube
+video id. Publishing is equivalent to sharing the original video link
+plus the generated guide. Use a private `PUBLISH_REPO` if that is
+unacceptable (note: Pages on private repos requires a paid GitHub
+plan).
+
 ## Deploy (single host)
 
 The server binds `127.0.0.1` by default. **Do not expose the listener to
